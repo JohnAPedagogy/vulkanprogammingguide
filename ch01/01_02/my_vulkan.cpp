@@ -74,7 +74,6 @@ VkResult vk_cleanup()
 void my_init_vulkan()
 {
     printf("Checking for physical graphics devices..\n");
-    int device_count = 0;
     int rc = vk_device_init_count(&device_count);
     if(rc == VK_SUCCESS) {
         printf("Found %d physical graphics devices.\n", device_count);

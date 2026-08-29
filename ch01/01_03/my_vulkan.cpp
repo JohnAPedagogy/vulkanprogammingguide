@@ -71,10 +71,63 @@ VkResult vk_cleanup()
 }
 
 
+VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyPropertyCount)
+{
+    VkResult vkr = VK_INCOMPLETE;
+    if(queueFamilyPropertyCount == nullptr || deviceIndex < 0 ||
+        device_count <= deviceIndex)
+    { // invalid device index or no device ready
+        printf("Warning Graphics device not present.");
+        return VK_NOT_READY;
+    }
+
+    VkQueueFamilyProperties* queueFamilyProperties = nullptr; //aray of VkQueueFamilyPoperties requires cleanup
+    // First determine the number of queue families supported by the physical
+    // device.
+    vkGetPhysicalDeviceQueueFamilyProperties(
+        m_devices[deviceIndex],
+        queueFamilyPropertyCount,
+        nullptr);
+    if(*queueFamilyPropertyCount == 0)
+    {
+        printf("Warning Device family not found bailing...\n");
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+    // Allocate enough space for the queue property structures.
+    queueFamilyProperties =(VkQueueFamilyProperties*)malloc(*queueFamilyPropertyCount * sizeof(VkQueueFamilyProperties));
+    if (queueFamilyProperties == nullptr)
+    {
+        vkr = VK_ERROR_OUT_OF_HOST_MEMORY;
+        return vkr;
+    }
+    // Now query the actual properties of the queue families.
+    vkGetPhysicalDeviceQueueFamilyProperties(
+        m_devices[deviceIndex],
+        queueFamilyPropertyCount,
+        queueFamilyProperties);
+    vkr = VK_SUCCESS;
+    // cleanup queueFamilyProperties
+    free(queueFamilyProperties);
+    return vkr;
+}
+
+void my_get_device_properties(int device_index)
+{
+    uint32_t dev_prop_count = 0;
+    int rc = vk_get_device_properties(device_index, &dev_prop_count);
+    if(rc != VK_SUCCESS)
+    {
+        printf("Failed to retrieve device properties\n");
+    }
+    else
+    {
+        printf("%d properties found for device[%d]\n",dev_prop_count, device_index );
+    }
+}
+
 void my_init_vulkan()
 {
     printf("Checking for physical graphics devices..\n");
-    int device_count = 0;
     int rc = vk_device_init_count(&device_count);
     if(rc == VK_SUCCESS) {
         printf("Found %d physical graphics devices.\n", device_count);
