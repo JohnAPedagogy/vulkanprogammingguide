@@ -15,7 +15,7 @@
 extern VkInstance m_instance;
 extern VkPhysicalDevice m_physicalDevice;
 extern VkPhysicalDevice *m_devices;
-extern VkDevice m_device = VK_NULL_HANDLE;
+extern VkDevice m_device;
 extern int device_count;
 
 VkResult vk_device_init_count(int *count);
