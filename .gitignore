@@ -1,0 +1,62 @@
+# Build dirs
+**/build/
+**/out/
+**/cmake-build-*/
+**/bin/
+**/obj/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# Compiled Object files
+*.o
+*.obj
+*.lo
+*.slo
+
+# Compiled Dynamic libraries
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.a
+*.lai
+*.la
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+*.ilk
+
+# Visual Studio
+.vs/
+*.sln.docstates
+*.vcxproj.user
+
+# Vulkan compiled shaders
+*.spv
+
+# IDE
+.vscode/
+.idea/
