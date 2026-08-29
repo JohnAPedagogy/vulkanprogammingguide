@@ -3,7 +3,12 @@ CONFIG   += c++17
 TARGET    = ch01
 TEMPLATE  = app
 
-SOURCES  += main.cpp
+SOURCES  += \
+    01_01_device.cpp \
+    my_vulkan.cpp
+
+HEADERS += \
+    my_vulkan.h
 
 # Keep a qmake command-line value; otherwise import the environment value.
 isEmpty(MSYS2_DIR): MSYS2_DIR = $$(MSYS2_DIR)

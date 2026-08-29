@@ -1,18 +1,10 @@
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include "my_vulkan.h"
 
-/* NOTES
- *
- * vk_<fname>() - (with underscore) are my vulkan setup functions separate from
- * vk<Function> - which are functions from the vulkan library
- */
 
 VkInstance m_instance = VK_NULL_HANDLE;
 VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
 VkPhysicalDevice *m_devices = nullptr;
-static int device_count = 0;
+int device_count = 0;
 
 VkResult vk_device_init_count(int *count)
 {
@@ -78,36 +70,8 @@ VkResult vk_cleanup()
     return VK_SUCCESS;
 }
 
-VkResult vk_get_device_properties(int deviceIndex)
-{
-    if(device_count <= deviceIndex)
-    { // invalid device index or no device ready
-        return VK_NOT_READY;
-    }
-    uint32_t queueFamilyPropertyCount;
-    VkQueueFamilyProperties* queueFamilyProperties; //aray of VkQueueFamilyPoperties requires cleanup
-    VkPhysicalDeviceMemoryProperties physicalDeviceMemoryProperties;
-    // Get the memory properties of the physical device.
-    vkGetPhysicalDeviceMemoryProperties(
-        m_devices[deviceIndex],
-        &physicalDeviceMemoryProperties);
-    // First determine the number of queue families supported by the physical
-    // device.
-    vkGetPhysicalDeviceQueueFamilyProperties(
-        m_devices[0],
-        &queueFamilyPropertyCount,
-        nullptr);
-    // Allocate enough space for the queue property structures.
-    queueFamilyProperties.resize(
-        queueFamilyPropertyCount);
-    // Now query the actual properties of the queue families.
-    vkGetPhysicalDeviceQueueFamilyProperties(
-        m_physicalDevices[0],
-        &queueFamilyPropertyCount,
-        queueFamilyProperties.data());
-}
 
-int main()
+void my_init_vulkan()
 {
     printf("Checking for physical graphics devices..\n");
     int device_count = 0;
@@ -129,6 +93,4 @@ int main()
             printf("Unkown error code %d", rc);
         }
     }
-    vk_cleanup();
-    return 0;
 }
