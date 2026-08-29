@@ -6,7 +6,7 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
     VkPhysicalDeviceFeatures supportedFeatures;
     VkPhysicalDeviceFeatures requiredFeatures = {};
 
-    vkGetPhysicalDeviceFeatures(m_physicalDevices[0],
+    vkGetPhysicalDeviceFeatures(m_devices[device_index],
                                 &supportedFeatures);
 
     requiredFeatures.multiDrawIndirect       =
@@ -23,6 +23,7 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
             1,                                               // queueCount
             nullptr                                          // pQueuePriorities
         };
+    *feature_count = (int)count_enabled_features(&supportedFeatures);
     const VkDeviceCreateInfo deviceCreateInfo =
         {
             VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,            // sType
@@ -37,10 +38,17 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
             &requiredFeatures                                 // pEnabledFeatures
         };
 
-    result = vkCreateDevice(m_physicalDevices[0],
+    result = vkCreateDevice(m_devices[device_index],
                             &deviceCreateInfo,
                             nullptr,
-                            &m_logicalDevice);
+                            &m_device);
+
+    if (result != VK_SUCCESS)
+    {
+        return VK_ERROR_FEATURE_NOT_PRESENT;
+    }else{
+        return VK_SUCCESS;
+    }
 }
 
 int main()
@@ -52,6 +60,17 @@ int main()
         return 0;
     }
     my_get_device_properties(0);
+    int features=0;
+    int device_index=0;
+    VkResult vkr = vk_get_logical_device(device_index, &features);
+    if(vkr != VK_SUCCESS)
+    {
+        printf("Requested graphics feature(s) not supported.");
+    }
+    else
+    {
+        printf("%d features pesent on device", features);
+    }
     vk_cleanup();
     return 0;
 }

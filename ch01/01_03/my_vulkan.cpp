@@ -1,10 +1,28 @@
 #include "my_vulkan.h"
+#include <stddef.h>
 
 
 VkInstance m_instance = VK_NULL_HANDLE;
 VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
 VkPhysicalDevice *m_devices = nullptr;
 int device_count = 0;
+
+
+size_t count_enabled_features(const VkPhysicalDeviceFeatures *features)
+{
+    const VkBool32 *p = (const VkBool32 *)features;
+    size_t count = 0;
+
+    for (size_t i = 0;
+         i < sizeof(VkPhysicalDeviceFeatures) / sizeof(VkBool32);
+         ++i)
+    {
+        if (p[i])
+            ++count;
+    }
+
+    return count;
+}
 
 VkResult vk_device_init_count(int *count)
 {

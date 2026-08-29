@@ -1,5 +1,6 @@
 #ifndef MY_VULKAN_H
 #define MY_VULKAN_H
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <stdio.h>
@@ -14,6 +15,7 @@
 extern VkInstance m_instance;
 extern VkPhysicalDevice m_physicalDevice;
 extern VkPhysicalDevice *m_devices;
+extern VkDevice m_device = VK_NULL_HANDLE;
 extern int device_count;
 
 VkResult vk_device_init_count(int *count);
@@ -22,5 +24,8 @@ VkResult vk_cleanup();
 
 void my_init_vulkan();
 void my_get_device_properties(int deviceIndex);
+
+// helper functions
+size_t count_enabled_features(const VkPhysicalDeviceFeatures *device);
 
 #endif // MY_VULKAN_H
