@@ -1,76 +1,61 @@
 #include "my_vulkan.h"
+//VALIDATION_Layers = "VK_LAYER_KHRONOS_validation"
+//DEFINES += ENABLE_VALIDATION
+#include <iostream>
 
-VkResult vk_get_logical_device(int device_index, int *feature_count)
+VkResult vk_get_layer_propeties(uint32_t *numInstanceLayers)
 {
-    VkResult result;
-    VkPhysicalDeviceFeatures supportedFeatures;
-    VkPhysicalDeviceFeatures requiredFeatures = {};
+    VkResult vkr = VK_INCOMPLETE;
+    VkLayerProperties* instanceLayerProperties = nullptr;
 
-    vkGetPhysicalDeviceFeatures(m_devices[device_index],
-                                &supportedFeatures);
+    // Query the instance layers.
+    vkEnumerateInstanceLayerProperties(numInstanceLayers,
+                                       nullptr);
 
-    requiredFeatures.multiDrawIndirect       =
-        supportedFeatures.multiDrawIndirect;
-    requiredFeatures.tessellationShader      = VK_TRUE;
-    requiredFeatures.geometryShader          = VK_TRUE;
-
-    const VkDeviceQueueCreateInfo deviceQueueCreateInfo =
-        {
-            VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,     // sType
-            nullptr,                                        // pNext
-            0,                                               // flags
-            0,                                               // queueFamilyIndex
-            1,                                               // queueCount
-            nullptr                                          // pQueuePriorities
-        };
-    *feature_count = (int)count_enabled_features(&supportedFeatures);
-    const VkDeviceCreateInfo deviceCreateInfo =
-        {
-            VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,            // sType
-            nullptr,                                         // pNext
-            0,                                                // flags
-            1,                                                // queueCreateInfoCount
-            &deviceQueueCreateInfo,                           // pQueueCreateInfos
-            0,                                                // enabledLayerCount
-            nullptr,                                          // ppEnabledLayerNames
-            0,                                                // enabledExtensionCount
-            nullptr,                                          // ppEnabledExtensionNames
-            &requiredFeatures                                 // pEnabledFeatures
-        };
-
-    result = vkCreateDevice(m_devices[device_index],
-                            &deviceCreateInfo,
-                            nullptr,
-                            &m_device);
-
-    if (result != VK_SUCCESS)
+    // If there are any layers, query their properties.
+    if (numInstanceLayers != 0)
     {
-        return VK_ERROR_FEATURE_NOT_PRESENT;
-    }else{
-        return VK_SUCCESS;
-    }
-}
-
-int main()
-{
-    my_init_vulkan();
-    if(device_count<=0)
-    {
-        printf("No graphics devices found!\n");
-        return 0;
-    }
-    my_get_device_properties(0);
-    int features=0;
-    int device_index=0;
-    VkResult vkr = vk_get_logical_device(device_index, &features);
-    if(vkr != VK_SUCCESS)
-    {
-        printf("Requested graphics feature(s) not supported.");
+        instanceLayerProperties = (VkLayerProperties*)malloc(*numInstanceLayers * sizeof(VkLayerProperties));
+        vkEnumerateInstanceLayerProperties(numInstanceLayers,
+                                           instanceLayerProperties);
+        vkr = VK_SUCCESS;
     }
     else
     {
-        printf("%d features pesent on device[%d]\n", features, device_index);
+        return VK_ERROR_LAYER_NOT_PRESENT;
     }
+    return vkr;
+}
+int main()
+{
+    // printf("starting window ...\n");
+    // if (!glfwInit())
+    // {
+    //     printf("Failed to initialize GLFW!\n");
+    //     return -1;
+    // }
+
+    // glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    // GLFWwindow* window = glfwCreateWindow(800, 600, "Vulkan Programming Guide", nullptr, nullptr);
+    // if (!window)
+    // {
+    //     printf("Failed to create GLFW window!\n");
+    //     glfwTerminate();
+    //     return -1;
+    // }
+    std::cout << "starting vulkan ...\n";
+    my_init_vulkan();
+    if(device_count<=0)
+    {
+        std::cout << "No graphics devices found!\n";
+        // glfwDestroyWindow(window);
+        // glfwTerminate();
+        return 0;
+    }
+    my_get_device_properties(0);
+    my_get_logical_device(0);
     vk_cleanup();
+    // glfwDestroyWindow(window);
+    // glfwTerminate();
     return 0;
 }

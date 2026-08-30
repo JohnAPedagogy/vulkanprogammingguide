@@ -1,6 +1,7 @@
 #include "my_vulkan.h"
 //VALIDATION_Layers = "VK_LAYER_KHRONOS_validation"
 //DEFINES += ENABLE_VALIDATION
+#include <iostream>
 
 VkResult vk_get_layer_propeties(uint32_t *numInstanceLayers)
 {
@@ -42,11 +43,11 @@ int main()
     //     glfwTerminate();
     //     return -1;
     // }
-    printf("starting vulkan ...\n");
+    std::cout << "starting vulkan ...\n";
     my_init_vulkan();
     if(device_count<=0)
     {
-        printf("No graphics devices found!\n");
+        std::cout << "No graphics devices found!\n";
         // glfwDestroyWindow(window);
         // glfwTerminate();
         return 0;
