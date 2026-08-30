@@ -1,5 +1,7 @@
 #include "my_vulkan.h"
 #include <stddef.h>
+#include <vector>
+#include <string>
 
 
 VkInstance m_instance = VK_NULL_HANDLE;
@@ -65,30 +67,52 @@ VkResult vk_device_init_count(int *count)
     instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     instanceCreateInfo.pApplicationInfo = &appInfo;
 
+    printf("Calling vkCreateInstance...\n");
+    
+    // Add validation layers if enabled
+#ifdef ENABLE_VALIDATION
+    const char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"};
+    instanceCreateInfo.enabledLayerCount = 1;
+    instanceCreateInfo.ppEnabledLayerNames = validationLayers;
+    printf("Validation layers enabled\n");
+#else
+    instanceCreateInfo.enabledLayerCount = 0;
+    instanceCreateInfo.ppEnabledLayerNames = nullptr;
+#endif
+
     result = vkCreateInstance(&instanceCreateInfo, nullptr, &m_instance);
     if (result != VK_SUCCESS)
     {
+        printf("vkCreateInstance failed with result=%d\n", result);
         return VK_NOT_READY;
     }
+    printf("vkCreateInstance succeeded\n");
+
     // First figure out how many devices are in the system
+    printf("Calling vkEnumeratePhysicalDevices...\n");
     uint32_t physicalDevCount = 0;
     result = vkEnumeratePhysicalDevices(m_instance, &physicalDevCount, nullptr);
     if (result != VK_SUCCESS)
     {
+        printf("vkEnumeratePhysicalDevices failed with result=%d\n", result);
         return VK_ERROR_INITIALIZATION_FAILED;
     }
+    printf("vkEnumeratePhysicalDevices found %u devices\n", physicalDevCount);
+
     // Size the device array appropriately
     // and get the physical device handles.
     // malloc allocation done here
     m_devices = (VkPhysicalDevice*)malloc(sizeof(VkPhysicalDevice) * physicalDevCount);
     if (m_devices != nullptr)
     {
+        printf("malloc succeeded, calling vkEnumeratePhysicalDevices to get handles...\n");
         vkEnumeratePhysicalDevices(m_instance, &physicalDevCount, &m_devices[0]);
         *count = (int)physicalDevCount;
     }
     else
     {
         result = VK_ERROR_OUT_OF_HOST_MEMORY;
+        printf("malloc failed, returning VK_ERROR_OUT_OF_HOST_MEMORY\n");
     }
 
 
@@ -237,6 +261,7 @@ void my_init_vulkan()
             printf("Unkown error code %d", rc);
         }
     }
+    printf("my_init_vulkan completed with rc=%d\n", rc);
 }
 
 void my_get_logical_device(int device_index)

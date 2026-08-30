@@ -23,12 +23,14 @@ VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyProperty
 VkResult vk_cleanup();
 VkResult vk_get_logical_device(int device_index, int *feature_count);
 
+// Validation layer support
+bool check_validation_layer_support();
+std::vector<const char*> get_required_validation_layers();
+std::vector<const char*> get_instance_extensions();
 
-// void test functions called from main
 void my_init_vulkan();
 void my_get_device_properties(int deviceIndex);
 void my_get_logical_device(int deviceIndex);
-
 
 // helper functions
 size_t count_enabled_features(const VkPhysicalDeviceFeatures *device);

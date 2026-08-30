@@ -25,6 +25,7 @@ VkResult vk_get_layer_propeties(uint32_t *numInstanceLayers)
 }
 int main()
 {
+    printf("starting window ...\n");
     if (!glfwInit())
     {
         printf("Failed to initialize GLFW!\n");
@@ -39,7 +40,7 @@ int main()
         glfwTerminate();
         return -1;
     }
-
+    printf("starting vulkan ...\n");
     my_init_vulkan();
     if(device_count<=0)
     {
