@@ -1,4 +1,5 @@
 #include "my_vulkan.h"
+#include <iostream>
 
 VkResult vk_get_logical_device(int device_index, int *feature_count)
 {
@@ -24,6 +25,10 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
             nullptr                                          // pQueuePriorities
         };
     *feature_count = (int)count_enabled_features(&supportedFeatures);
+    if (!supportedFeatures.tessellationShader || !supportedFeatures.geometryShader) {
+        std::cout << "Device doesn't support required features!\n";
+        return VK_ERROR_FEATURE_NOT_PRESENT;
+    }
     const VkDeviceCreateInfo deviceCreateInfo =
         {
             VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,            // sType
@@ -65,11 +70,11 @@ int main()
     VkResult vkr = vk_get_logical_device(device_index, &features);
     if(vkr != VK_SUCCESS)
     {
-        printf("Requested graphics feature(s) not supported.");
+        std::cout << "Requested graphics feature(s) not supported.";
     }
     else
     {
-        printf("%d features pesent on device[%d]\n", features, device_index);
+        std::cout << features << " features pesent on device[" << device_index << "]\n";
     }
     vk_cleanup();
     return 0;

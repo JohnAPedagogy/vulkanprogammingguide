@@ -1,4 +1,6 @@
 #include "my_vulkan.h"
+//VALIDATION_Layers = "VK_LAYER_KHRONOS_validation"
+//DEFINES += ENABLE_VALIDATION
 
 VkResult vk_get_layer_propeties(uint32_t *numInstanceLayers)
 {

@@ -1,6 +1,7 @@
 #include "my_vulkan.h"
 #include <stddef.h>
-#include <iostream>
+#include <stdio.h>
+
 
 VkInstance m_instance = VK_NULL_HANDLE;
 VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
@@ -19,7 +20,7 @@ size_t count_enabled_features(const VkPhysicalDeviceFeatures *features)
          ++i)
     {
         if (p[i])
-        ++count;
+            ++count;
     }
 
     return count;
@@ -54,6 +55,12 @@ VkResult vk_device_init_count(int *count)
 
     VkInstanceCreateInfo instanceCreateInfo = {};
 
+#ifdef ENABLE_VALIDATION
+    const char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"};
+    instanceCreateInfo.enabledLayerCount = 1;
+    instanceCreateInfo.ppEnabledLayerNames = validationLayers;
+#endif
+
     // Generic app info structure
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pApplicationName = "Application";
@@ -65,25 +72,25 @@ VkResult vk_device_init_count(int *count)
     instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     instanceCreateInfo.pApplicationInfo = &appInfo;
 
-    std::cout << "vkCreateInstance called " << "\n" << std::endl;
+    printf("vkCreateInstance called\n");
     result = vkCreateInstance(&instanceCreateInfo, nullptr, &m_instance);
     if (result != VK_SUCCESS)
     {
-        std::cout << "vkCreateInstance failed with result=" << result << "\n";
+        printf("vkCreateInstance failed with result=%d\n", result);
         return VK_NOT_READY;
     }
-    std::cout << "vkCreateInstance succeeded\n";
+    printf("vkCreateInstance succeeded\n");
 
     // First figure out how many devices are in the system
-    std::cout << "vkEnumeratePhysicalDevices called\n";
+    printf("vkEnumeratePhysicalDevices called\n");
     uint32_t physicalDevCount = 0;
     result = vkEnumeratePhysicalDevices(m_instance, &physicalDevCount, nullptr);
     if (result != VK_SUCCESS)
     {
-        std::cout << "vkEnumeratePhysicalDevices failed with result=" << result << "\n";
+        printf("vkEnumeratePhysicalDevices failed with result=%d\n", result);
         return VK_ERROR_INITIALIZATION_FAILED;
     }
-    std::cout << "vkEnumeratePhysicalDevices found %u" << physicalDevCount << " devices\n";
+    printf("vkEnumeratePhysicalDevices found %u devices\n", physicalDevCount);
 
     // Size the device array appropriately
     // and get the physical device handles.
@@ -91,14 +98,14 @@ VkResult vk_device_init_count(int *count)
     m_devices = (VkPhysicalDevice*)malloc(sizeof(VkPhysicalDevice) * physicalDevCount);
     if (m_devices != nullptr)
     {
-        std::cout << "malloc succeeded\n" ;
+        printf("malloc succeeded\n");
         vkEnumeratePhysicalDevices(m_instance, &physicalDevCount, &m_devices[0]);
         *count = (int)physicalDevCount;
     }
     else
     {
         result = VK_ERROR_OUT_OF_HOST_MEMORY;
-        std::cout << "malloc failed\n";
+        printf("malloc failed\n");
     }
 
 
@@ -111,7 +118,7 @@ VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyProperty
     if(queueFamilyPropertyCount == nullptr || deviceIndex < 0 ||
         device_count <= deviceIndex || m_devices == nullptr)
     { // invalid device index or no device ready
-        std::cout << "Warning Graphics device not present.\n";
+        printf("Warning Graphics device not present.\n");
         return VK_NOT_READY;
     }
 
@@ -124,7 +131,7 @@ VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyProperty
         nullptr);
     if(*queueFamilyPropertyCount == 0)
     {
-        std::cout << "Warning Device family not found bailing...\n";
+        printf("Warning Device family not found bailing...\n");
         return VK_ERROR_INITIALIZATION_FAILED;
     }
     // Allocate enough space for the queue property structures.
@@ -150,7 +157,7 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
 {
     if(device_index < 0 || device_index >= device_count || m_devices == nullptr)
     {
-        std::cout << "Warning: Invalid device index or no device available.\n";
+        printf("Warning: Invalid device index or no device available.\n");
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
@@ -192,7 +199,7 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
 
     if (m_devices[device_index] == VK_NULL_HANDLE)
     {
-        std::cout << "Warning: Physical device handle is null.\n";
+        printf("Warning: Physical device handle is null.\n");
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
@@ -203,12 +210,12 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
 
     if (result != VK_SUCCESS)
     {
-        std::cout << "vkCreateDevice failed with result=" << result << "\n";
+        printf("vkCreateDevice failed with result=%d\n", result);
         return VK_ERROR_FEATURE_NOT_PRESENT;
     }
     else
     {
-        std::cout << "vkCreateDevice succeeded\n";
+        printf("vkCreateDevice succeeded\n");
         return VK_SUCCESS;
     }
 }
@@ -219,36 +226,36 @@ void my_get_device_properties(int device_index)
     int rc = vk_get_device_properties(device_index, &dev_prop_count);
     if(rc != VK_SUCCESS)
     {
-        std::cout << "Failed to retrieve device properties\n";
+        printf("Failed to retrieve device properties\n");
     }
     else
     {
-        std::cout << dev_prop_count << " properties found for device[" << device_index << "]\n";
+        printf("%d properties found for device[%d]\n",dev_prop_count, device_index );
     }
 }
 
 void my_init_vulkan()
 {
-    std::cout << "Checking for physical graphics devices..\n";
+    printf("Checking for physical graphics devices..\n");
     int rc = vk_device_init_count(&device_count);
     if(rc == VK_SUCCESS) {
-        std::cout << "Found " << device_count << " physical graphics device(s).\n";
+        printf("Found %d physical graphics devices.\n", device_count);
     }else {
         switch(rc){
         case VK_ERROR_INITIALIZATION_FAILED:
-            std::cout << "Initialisation failed.\n";
+            printf("Initialisation failed.\n");
             break;
         case VK_ERROR_OUT_OF_HOST_MEMORY:
-            std::cout << "Out of host memory.\n";
+            printf("Out of host memory.\n");
             break;
         case VK_NOT_READY:
-            std::cout << "No instance found.\n";
+            printf("No instance found.\n");
             break;
         default:
-            std::cout << "Unkown error code " << rc << "\n";
+            printf("Unkown error code %d", rc);
         }
     }
-    std::cout << "my_init_vulkan completed with code " << rc << "\n";
+    printf("my_init_vulkan completed with rc=%d\n", rc);
 }
 
 void my_get_logical_device(int device_index)
@@ -257,10 +264,10 @@ void my_get_logical_device(int device_index)
     VkResult vkr = vk_get_logical_device(device_index, &features);
     if(vkr != VK_SUCCESS)
     {
-        std::cout << "Requested graphics feature(s) not supported.";
+        printf("Requested graphics feature(s) not supported.");
     }
     else
     {
-        std::cout <<  features << " features pesent on device["<<device_index <<"]\n";
+        printf("%d features present on device[%d]\n", features, device_index);
     }
 }

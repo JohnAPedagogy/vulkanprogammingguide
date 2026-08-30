@@ -1,11 +1,12 @@
 #include "my_vulkan.h"
 #include <stddef.h>
+#include <iostream>
 
 
 VkInstance m_instance = VK_NULL_HANDLE;
 VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
 VkPhysicalDevice *m_devices = nullptr;
-extern VkDevice m_device = VK_NULL_HANDLE;
+VkDevice m_device = VK_NULL_HANDLE;
 int device_count = 0;
 
 
@@ -100,7 +101,7 @@ VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyProperty
     if(queueFamilyPropertyCount == nullptr || deviceIndex < 0 ||
         device_count <= deviceIndex)
     { // invalid device index or no device ready
-        printf("Warning Graphics device not present.");
+        std::cout << "Warning Graphics device not present.";
         return VK_NOT_READY;
     }
 
@@ -113,7 +114,7 @@ VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyProperty
         nullptr);
     if(*queueFamilyPropertyCount == 0)
     {
-        printf("Warning Device family not found bailing...\n");
+        std::cout << "Warning Device family not found bailing...\n";
         return VK_ERROR_INITIALIZATION_FAILED;
     }
     // Allocate enough space for the queue property structures.
@@ -140,33 +141,34 @@ void my_get_device_properties(int device_index)
     int rc = vk_get_device_properties(device_index, &dev_prop_count);
     if(rc != VK_SUCCESS)
     {
-        printf("Failed to retrieve device properties\n");
+        std::cout << "Failed to retrieve device properties\n";
     }
     else
     {
-        printf("%d properties found for device[%d]\n",dev_prop_count, device_index );
+        std::cout << dev_prop_count << " properties found for device[" << device_index << "]\n";
     }
 }
 
 void my_init_vulkan()
 {
-    printf("Checking for physical graphics devices..\n");
+    std::cout << "Checking for physical graphics devices..\n";
     int rc = vk_device_init_count(&device_count);
     if(rc == VK_SUCCESS) {
-        printf("Found %d physical graphics devices.\n", device_count);
+        std::cout << "Found " << device_count << " physical graphics devices.\n";
     }else {
         switch(rc){
         case VK_ERROR_INITIALIZATION_FAILED:
-            printf("Initialisation failed.\n");
+            std::cout << "Initialisation failed.\n";
+;
             break;
         case VK_ERROR_OUT_OF_HOST_MEMORY:
-            printf("Out of host memory.\n");
+            std::cout << "Out of host memory.\n";
             break;
         case VK_NOT_READY:
-            printf("No instance found.\n");
+            std::cout << "No instance found.\n";
             break;
         default:
-            printf("Unkown error code %d", rc);
+            std::cout << "Unkown error code " << rc;
         }
     }
 }
