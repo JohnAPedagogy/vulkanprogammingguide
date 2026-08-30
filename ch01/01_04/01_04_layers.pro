@@ -3,11 +3,9 @@ CONFIG   += c++17
 TARGET    = ch01
 TEMPLATE  = app
 
-# Enable validation layers
-contains(QT, vulkan): {
-    VALIDATION_Layers = "VK_LAYER_KHRONOS_validation"
-    DEFINES += ENABLE_VALIDATION
-}
+# Enable validation layers (unconditional - Qt vulkan module not available)
+VALIDATION_Layers = "VK_LAYER_KHRONOS_validation"
+DEFINES += ENABLE_VALIDATION
 
 SOURCES  += \
     01_04_layers.cpp \
