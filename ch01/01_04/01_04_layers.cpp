@@ -25,14 +25,33 @@ VkResult vk_get_layer_propeties(uint32_t *numInstanceLayers)
 }
 int main()
 {
+    if (!glfwInit())
+    {
+        printf("Failed to initialize GLFW!\n");
+        return -1;
+    }
+
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    GLFWwindow* window = glfwCreateWindow(800, 600, "Vulkan Programming Guide", nullptr, nullptr);
+    if (!window)
+    {
+        printf("Failed to create GLFW window!\n");
+        glfwTerminate();
+        return -1;
+    }
+
     my_init_vulkan();
     if(device_count<=0)
     {
         printf("No graphics devices found!\n");
+        glfwDestroyWindow(window);
+        glfwTerminate();
         return 0;
     }
     my_get_device_properties(0);
     my_get_logical_device(0);
     vk_cleanup();
+    glfwDestroyWindow(window);
+    glfwTerminate();
     return 0;
 }

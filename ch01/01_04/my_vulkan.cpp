@@ -99,13 +99,13 @@ VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyProperty
 {
     VkResult vkr = VK_INCOMPLETE;
     if(queueFamilyPropertyCount == nullptr || deviceIndex < 0 ||
-        device_count <= deviceIndex)
+        device_count <= deviceIndex || m_devices == nullptr)
     { // invalid device index or no device ready
         printf("Warning Graphics device not present.");
         return VK_NOT_READY;
     }
 
-    VkQueueFamilyProperties* queueFamilyProperties = nullptr; //aray of VkQueueFamilyPoperties requires cleanup
+    VkQueueFamilyProperties* queueFamilyProperties = nullptr; //array of VkQueueFamilyPoperties requires cleanup
     // First determine the number of queue families supported by the physical
     // device.
     vkGetPhysicalDeviceQueueFamilyProperties(
@@ -138,6 +138,12 @@ VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyProperty
 
 VkResult vk_get_logical_device(int device_index, int *feature_count)
 {
+    if(device_index < 0 || device_index >= device_count || m_devices == nullptr)
+    {
+        printf("Warning: Invalid device index or no device available.\n");
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
     VkResult result;
     VkPhysicalDeviceFeatures supportedFeatures;
     VkPhysicalDeviceFeatures requiredFeatures = {};
@@ -174,6 +180,12 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
             &requiredFeatures                                 // pEnabledFeatures
         };
 
+    if (m_devices[device_index] == VK_NULL_HANDLE)
+    {
+        printf("Warning: Physical device handle is null.\n");
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
     result = vkCreateDevice(m_devices[device_index],
                             &deviceCreateInfo,
                             nullptr,
@@ -182,7 +194,9 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
     if (result != VK_SUCCESS)
     {
         return VK_ERROR_FEATURE_NOT_PRESENT;
-    }else{
+    }
+    else
+    {
         return VK_SUCCESS;
     }
 }
