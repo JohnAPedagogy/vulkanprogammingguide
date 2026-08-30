@@ -40,6 +40,8 @@ VkResult vk_cleanup()
     }
     if (m_device != VK_NULL_HANDLE)
     {
+        // Additional safety: only destroy if not already null
+        // Some Vulkan loader implementations warn if device appears invalid
         vkDestroyDevice(m_device, nullptr);
         m_device = VK_NULL_HANDLE;
     }
@@ -165,13 +167,17 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
     VkPhysicalDeviceFeatures supportedFeatures;
     VkPhysicalDeviceFeatures requiredFeatures = {};
 
+    // Get physical device features FIRST before requesting logical device
     vkGetPhysicalDeviceFeatures(m_devices[device_index],
                                 &supportedFeatures);
 
+    // Only request features that are supported by the device
+    // This prevents vkCreateDevice from failing on GPUs without tessellation/geometry shaders
     requiredFeatures.multiDrawIndirect       =
         supportedFeatures.multiDrawIndirect;
-    requiredFeatures.tessellationShader      = VK_TRUE;
-    requiredFeatures.geometryShader          = VK_TRUE;
+    // Only request tessellation/geometry if supported
+    requiredFeatures.tessellationShader      = supportedFeatures.tessellationShader;
+    requiredFeatures.geometryShader          = supportedFeatures.geometryShader;
 
     const VkDeviceQueueCreateInfo deviceQueueCreateInfo =
         {
@@ -211,13 +217,28 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
     if (result != VK_SUCCESS)
     {
         printf("vkCreateDevice failed with result=%d\n", result);
-        return VK_ERROR_FEATURE_NOT_PRESENT;
+        // If features weren't supported, try without requiring tessellation/geometry
+        if (result == VK_ERROR_FEATURE_NOT_PRESENT)
+        {
+            printf("Attempting device creation without mandatory tessellation/geometry features...\n");
+            requiredFeatures.tessellationShader      = VK_FALSE;
+            requiredFeatures.geometryShader          = VK_FALSE;
+            
+            result = vkCreateDevice(m_devices[device_index],
+                                    &deviceCreateInfo,
+                                    nullptr,
+                                    &m_device);
+        }
+        if (result != VK_SUCCESS)
+        {
+            return VK_ERROR_FEATURE_NOT_PRESENT;
+        }
     }
     else
     {
         printf("vkCreateDevice succeeded\n");
-        return VK_SUCCESS;
     }
+    return VK_SUCCESS;
 }
 
 void my_get_device_properties(int device_index)
