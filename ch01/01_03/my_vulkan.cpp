@@ -25,6 +25,26 @@ size_t count_enabled_features(const VkPhysicalDeviceFeatures *features)
     return count;
 }
 
+VkResult vk_cleanup()
+{
+    if (m_instance != VK_NULL_HANDLE)
+    {
+        vkDestroyInstance(m_instance, nullptr);
+        m_instance = VK_NULL_HANDLE;
+    }
+    if (m_devices != nullptr)
+    {
+        free(m_devices);
+        m_devices = nullptr;
+    }
+    if (m_device != VK_NULL_HANDLE)
+    {
+        vkDestroyDevice(m_device, nullptr);
+        m_device = VK_NULL_HANDLE;
+    }
+    return VK_SUCCESS;
+}
+
 VkResult vk_device_init_count(int *count)
 {
     *count = 0;
@@ -73,22 +93,6 @@ VkResult vk_device_init_count(int *count)
 
     return result;
 }
-
-VkResult vk_cleanup()
-{
-    if (m_instance != VK_NULL_HANDLE)
-    {
-        vkDestroyInstance(m_instance, nullptr);
-        m_instance = VK_NULL_HANDLE;
-    }
-    if (m_devices != nullptr)
-    {
-        free(m_devices);
-        m_devices = nullptr;
-    }
-    return VK_SUCCESS;
-}
-
 
 VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyPropertyCount)
 {
