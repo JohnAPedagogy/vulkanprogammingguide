@@ -225,9 +225,10 @@ void my_init_vulkan()
     }
 }
 
-void my_get_logical_device(int device_index)
+void my_get_logical_device(int deviceIndex)
 {
     int features=0;
+    int device_index=0;
     VkResult vkr = vk_get_logical_device(device_index, &features);
     if(vkr != VK_SUCCESS)
     {
