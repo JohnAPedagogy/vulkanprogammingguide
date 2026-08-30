@@ -1,7 +1,5 @@
 #include "my_vulkan.h"
 #include <stddef.h>
-#include <vector>
-#include <string>
 
 
 VkInstance m_instance = VK_NULL_HANDLE;
@@ -67,19 +65,7 @@ VkResult vk_device_init_count(int *count)
     instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     instanceCreateInfo.pApplicationInfo = &appInfo;
 
-    printf("Calling vkCreateInstance...\n");
-    
-    // Add validation layers if enabled
-#ifdef ENABLE_VALIDATION
-    const char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"};
-    instanceCreateInfo.enabledLayerCount = 1;
-    instanceCreateInfo.ppEnabledLayerNames = validationLayers;
-    printf("Validation layers enabled\n");
-#else
-    instanceCreateInfo.enabledLayerCount = 0;
-    instanceCreateInfo.ppEnabledLayerNames = nullptr;
-#endif
-
+    printf("vkCreateInstance called\n");
     result = vkCreateInstance(&instanceCreateInfo, nullptr, &m_instance);
     if (result != VK_SUCCESS)
     {
@@ -89,7 +75,7 @@ VkResult vk_device_init_count(int *count)
     printf("vkCreateInstance succeeded\n");
 
     // First figure out how many devices are in the system
-    printf("Calling vkEnumeratePhysicalDevices...\n");
+    printf("vkEnumeratePhysicalDevices called\n");
     uint32_t physicalDevCount = 0;
     result = vkEnumeratePhysicalDevices(m_instance, &physicalDevCount, nullptr);
     if (result != VK_SUCCESS)
@@ -105,14 +91,14 @@ VkResult vk_device_init_count(int *count)
     m_devices = (VkPhysicalDevice*)malloc(sizeof(VkPhysicalDevice) * physicalDevCount);
     if (m_devices != nullptr)
     {
-        printf("malloc succeeded, calling vkEnumeratePhysicalDevices to get handles...\n");
+        printf("malloc succeeded\n");
         vkEnumeratePhysicalDevices(m_instance, &physicalDevCount, &m_devices[0]);
         *count = (int)physicalDevCount;
     }
     else
     {
         result = VK_ERROR_OUT_OF_HOST_MEMORY;
-        printf("malloc failed, returning VK_ERROR_OUT_OF_HOST_MEMORY\n");
+        printf("malloc failed\n");
     }
 
 
@@ -125,7 +111,7 @@ VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyProperty
     if(queueFamilyPropertyCount == nullptr || deviceIndex < 0 ||
         device_count <= deviceIndex || m_devices == nullptr)
     { // invalid device index or no device ready
-        printf("Warning Graphics device not present.");
+        printf("Warning Graphics device not present.\n");
         return VK_NOT_READY;
     }
 
@@ -217,14 +203,15 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
 
     if (result != VK_SUCCESS)
     {
+        printf("vkCreateDevice failed with result=%d\n", result);
         return VK_ERROR_FEATURE_NOT_PRESENT;
     }
     else
     {
+        printf("vkCreateDevice succeeded\n");
         return VK_SUCCESS;
     }
 }
-
 
 void my_get_device_properties(int device_index)
 {
