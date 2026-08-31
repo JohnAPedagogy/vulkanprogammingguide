@@ -240,6 +240,63 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
     return VK_SUCCESS;
 }
 
+
+VkResult vk_get_layer_properties(int device_index, uint32_t *numInstanceLayers)
+{
+    VkResult vkr = VK_INCOMPLETE;
+    VkLayerProperties* instanceLayerProperties = nullptr;
+    VkLayerProperties* deviceLayerProperties = nullptr;
+
+    if (numInstanceLayers == nullptr)
+        return VK_ERROR_INITIALIZATION_FAILED;
+
+    // Query the instance layers.
+    vkEnumerateInstanceLayerProperties(numInstanceLayers,
+                                       nullptr);
+
+    // If there are any layers, query their properties.
+    if (*numInstanceLayers != 0)
+    {
+        instanceLayerProperties = (VkLayerProperties*)malloc(*numInstanceLayers * sizeof(VkLayerProperties));
+        vkEnumerateInstanceLayerProperties(numInstanceLayers,
+                                           instanceLayerProperties);
+        vkr = VK_SUCCESS;
+    }
+    else
+    {
+        return VK_ERROR_LAYER_NOT_PRESENT;
+    }
+
+    // DEVICE LAYER PROPERTIES
+
+    // Query the device layers.
+    uint32_t deviceLayerCnt;
+    vkEnumerateDeviceLayerProperties(m_devices[device_index],
+                                     &deviceLayerCnt,
+                                       nullptr);
+
+    // If there are any layers, query their properties.
+    if (deviceLayerCnt != 0)
+    {
+        deviceLayerProperties = (VkLayerProperties*)malloc(deviceLayerCnt * sizeof(VkLayerProperties));
+        vkEnumerateDeviceLayerProperties(m_devices[device_index],
+                                         &deviceLayerCnt,
+                                           deviceLayerProperties);
+        vkr = VK_SUCCESS;
+    }
+    else
+    {
+        return VK_ERROR_LAYER_NOT_PRESENT;
+    }
+    std::cout << "Showing "<< *numInstanceLayers <<" Instance layer Properties***\n";
+    dbg_show_layer_property_names(instanceLayerProperties, *numInstanceLayers);
+    std::cout << "\nShowing "<< deviceLayerCnt  << " Device layer Properties***\n";
+    dbg_show_layer_property_names(deviceLayerProperties, deviceLayerCnt);
+    free(deviceLayerProperties);
+    free(instanceLayerProperties);
+    return vkr;
+}
+
 void my_get_device_properties(int device_index)
 {
     uint32_t dev_prop_count = 0;
@@ -290,4 +347,24 @@ void my_get_logical_device(int device_index)
     {
         std::cout << features << " features present on device[" << device_index << "]\n";
     }
+}
+
+void my_get_layer_properties(int deviceIndex)
+{
+    uint32_t layer_count = 0;
+    VkResult vkr = vk_get_layer_properties(deviceIndex, &layer_count);
+    if(vkr == VK_SUCCESS)
+    {
+        std::cout << layer_count << " layers found!\n";
+    }
+    else
+    {
+        std::cout << "Erro: Layer not found\n";
+    }
+}
+
+void dbg_show_layer_property_names(VkLayerProperties* p, int count)
+{
+    for(int i = 0; i < count; i++)
+        std::cout << p[i].layerName << "\n";
 }

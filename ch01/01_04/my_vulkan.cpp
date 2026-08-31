@@ -290,3 +290,4 @@ void my_get_logical_device(int device_index)
         std::cout << features << " features present on device[" << device_index << "]\n";
     }
 }
+

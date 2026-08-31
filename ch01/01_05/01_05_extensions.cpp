@@ -2,33 +2,9 @@
 
 #include <iostream>
 
-VkResult vk_get_layer_propeties(uint32_t *numInstanceLayers)
-{
-    VkResult vkr = VK_INCOMPLETE;
-    VkLayerProperties* instanceLayerProperties = nullptr;
+//VALIDATION_Layers = "VK_LAYER_KHRONOS_validation"
+//DEFINES += ENABLE_VALIDATION
 
-    if (numInstanceLayers == nullptr)
-        return VK_ERROR_INITIALIZATION_FAILED;
-
-    // Query the instance layers.
-    vkEnumerateInstanceLayerProperties(numInstanceLayers,
-                                       nullptr);
-
-    // If there are any layers, query their properties.
-    if (*numInstanceLayers != 0)
-    {
-        instanceLayerProperties = (VkLayerProperties*)malloc(*numInstanceLayers * sizeof(VkLayerProperties));
-        vkEnumerateInstanceLayerProperties(numInstanceLayers,
-                                           instanceLayerProperties);
-        free(instanceLayerProperties);
-        vkr = VK_SUCCESS;
-    }
-    else
-    {
-        return VK_ERROR_LAYER_NOT_PRESENT;
-    }
-    return vkr;
-}
 int main()
 {
     // printf("starting window ...\n");
@@ -57,6 +33,7 @@ int main()
     }
     my_get_device_properties(0);
     my_get_logical_device(0);
+    my_get_layer_properties(0);
     vk_cleanup();
     // glfwDestroyWindow(window);
     // glfwTerminate();

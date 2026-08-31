@@ -3,8 +3,6 @@ CONFIG   += c++17
 TARGET    = ch01
 TEMPLATE  = app
 
-VALIDATION_Layers = "VK_LAYER_KHRONOS_validation"
-DEFINES += ENABLE_VALIDATION
 
 SOURCES  += \
     01_05_extensions.cpp \
