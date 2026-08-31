@@ -1,6 +1,9 @@
 #include "my_vulkan.h"
 #include <stddef.h>
 #include <iostream>
+#include <stdlib.h>
+#include <cstdio>
+#include <string>
 
 
 VkInstance m_instance = VK_NULL_HANDLE;
@@ -313,6 +316,40 @@ void my_get_device_properties(int device_index)
 
 void my_init_vulkan()
 {
+#ifdef ENABLE_VALIDATION
+    // Point the Vulkan loader at the MSYS2 validation layer manifest so it
+    // can find VK_LAYER_KHRONOS_validation without requiring VK_LAYER_PATH
+    // to be set in the calling environment.
+    if (!getenv("VK_LAYER_PATH"))
+    {
+        _putenv_s("VK_LAYER_PATH", VK_LAYER_PATH);
+        std::cout << "VK_LAYER_PATH = " << VK_LAYER_PATH << "\n";
+
+        std::cout << "--- vulkaninfo validation layer check ---\n";
+#ifdef _WIN32
+        std::string cmd = std::string(VK_LAYER_PATH) + "/vulkaninfo.exe --summary 2>&1";
+#else
+        std::string cmd = "vulkaninfo --summary 2>&1";
+#endif
+        FILE *pipe = popen(cmd.c_str(), "r");
+        if (pipe)
+        {
+            char buf[256];
+            while (fgets(buf, sizeof(buf), pipe))
+            {
+                std::string line(buf);
+                // case-insensitive search for "valid" (covers "validation", "Valid", etc.)
+                std::string lower = line;
+                for (auto &c : lower) c = (char)tolower((unsigned char)c);
+                if (lower.find("valid") != std::string::npos)
+                    std::cout << line;
+            }
+            pclose(pipe);
+        }
+        std::cout << "--- end validation check ---\n";
+    }
+#endif
+
     std::cout << "Checking for physical graphics devices..\n";
     int rc = vk_device_init_count(&device_count);
     if(rc == VK_SUCCESS) {

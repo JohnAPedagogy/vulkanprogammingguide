@@ -2,8 +2,7 @@
 
 #include <iostream>
 
-//VALIDATION_Layers = "VK_LAYER_KHRONOS_validation"
-//DEFINES += ENABLE_VALIDATION
+
 
 int main()
 {
