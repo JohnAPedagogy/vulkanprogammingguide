@@ -8,16 +8,20 @@ VkResult vk_get_layer_propeties(uint32_t *numInstanceLayers)
     VkResult vkr = VK_INCOMPLETE;
     VkLayerProperties* instanceLayerProperties = nullptr;
 
+    if (numInstanceLayers == nullptr)
+        return VK_ERROR_INITIALIZATION_FAILED;
+
     // Query the instance layers.
     vkEnumerateInstanceLayerProperties(numInstanceLayers,
                                        nullptr);
 
     // If there are any layers, query their properties.
-    if (numInstanceLayers != 0)
+    if (*numInstanceLayers != 0)
     {
         instanceLayerProperties = (VkLayerProperties*)malloc(*numInstanceLayers * sizeof(VkLayerProperties));
         vkEnumerateInstanceLayerProperties(numInstanceLayers,
                                            instanceLayerProperties);
+        free(instanceLayerProperties);
         vkr = VK_SUCCESS;
     }
     else

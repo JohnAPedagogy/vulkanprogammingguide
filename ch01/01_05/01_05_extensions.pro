@@ -4,7 +4,7 @@ TARGET    = ch01
 TEMPLATE  = app
 
 SOURCES  += \
-    01_03_features.cpp \
+    01_05_extensions.cpp \
     my_vulkan.cpp \
 
 HEADERS += \

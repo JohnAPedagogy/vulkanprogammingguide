@@ -28,22 +28,20 @@ size_t count_enabled_features(const VkPhysicalDeviceFeatures *features)
 
 VkResult vk_cleanup()
 {
-    if (m_instance != VK_NULL_HANDLE)
+    if (m_device != VK_NULL_HANDLE)
     {
-        vkDestroyInstance(m_instance, nullptr);
-        m_instance = VK_NULL_HANDLE;
+        vkDestroyDevice(m_device, nullptr);
+        m_device = VK_NULL_HANDLE;
     }
     if (m_devices != nullptr)
     {
         free(m_devices);
         m_devices = nullptr;
     }
-    if (m_device != VK_NULL_HANDLE)
+    if (m_instance != VK_NULL_HANDLE)
     {
-        // Additional safety: only destroy if not already null
-        // Some Vulkan loader implementations warn if device appears invalid
-        vkDestroyDevice(m_device, nullptr);
-        m_device = VK_NULL_HANDLE;
+        vkDestroyInstance(m_instance, nullptr);
+        m_instance = VK_NULL_HANDLE;
     }
     return VK_SUCCESS;
 }
@@ -179,6 +177,7 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
     requiredFeatures.tessellationShader      = supportedFeatures.tessellationShader;
     requiredFeatures.geometryShader          = supportedFeatures.geometryShader;
 
+    const float queuePriority = 1.0f;
     const VkDeviceQueueCreateInfo deviceQueueCreateInfo =
         {
             VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,     // sType
@@ -186,7 +185,7 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
             0,                                               // flags
             0,                                               // queueFamilyIndex
             1,                                               // queueCount
-            nullptr                                          // pQueuePriorities
+            &queuePriority                                    // pQueuePriorities
         };
     *feature_count = (int)count_enabled_features(&supportedFeatures);
     const VkDeviceCreateInfo deviceCreateInfo =
