@@ -28,6 +28,11 @@ size_t count_enabled_features(const VkPhysicalDeviceFeatures *features)
 
 VkResult vk_cleanup()
 {
+    if (m_device != VK_NULL_HANDLE)
+    {
+        vkDestroyDevice(m_device, nullptr);
+        m_device = VK_NULL_HANDLE;
+    }
     if (m_instance != VK_NULL_HANDLE)
     {
         vkDestroyInstance(m_instance, nullptr);
@@ -37,13 +42,6 @@ VkResult vk_cleanup()
     {
         free(m_devices);
         m_devices = nullptr;
-    }
-    if (m_device != VK_NULL_HANDLE)
-    {
-        // Additional safety: only destroy if not already null
-        // Some Vulkan loader implementations warn if device appears invalid
-        vkDestroyDevice(m_device, nullptr);
-        m_device = VK_NULL_HANDLE;
     }
     return VK_SUCCESS;
 }
