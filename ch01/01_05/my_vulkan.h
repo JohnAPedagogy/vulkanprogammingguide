@@ -24,6 +24,7 @@ VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyProperty
 VkResult vk_cleanup();
 VkResult vk_get_logical_device(int device_index, int *feature_count);
 VkResult vk_get_layer_properties(int device_index, uint32_t *numInstanceLayers);
+//VkResult vk_get_extensions(uint32_t *ex);
 
 // Validation layer support
 bool check_validation_layer_support();

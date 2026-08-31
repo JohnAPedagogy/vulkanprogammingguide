@@ -396,7 +396,7 @@ void my_get_layer_properties(int deviceIndex)
     }
     else
     {
-        std::cout << "Erro: Layer not found\n";
+        std::cout << "Erro: Layer not found!\n";
     }
 }
 
