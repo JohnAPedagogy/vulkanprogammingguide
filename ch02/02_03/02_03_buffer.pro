@@ -3,16 +3,21 @@ CONFIG   += c++17
 TARGET    = ch01
 TEMPLATE  = app
 
+DEFINES    += ENABLE_VALIDATION
+
 SOURCES  += \
     ../0202_allocator.cpp \
-    02_03_instance.cpp \
+    02_03_buffer.cpp \
     my_vulkan.cpp
 
 HEADERS += \
     ../0201_allocator.h \
     my_vulkan.h
 
+
+
 # Keep a qmake command-line value; otherwise import the environment value.
+
 isEmpty(MSYS2_DIR): MSYS2_DIR = $$(MSYS2_DIR)
 
 isEmpty(MSYS2_DIR) {
@@ -24,6 +29,7 @@ isEmpty(MSYS2_DIR) {
 }
 
 INCLUDEPATH += $$MSYS2_DIR/include
+DEFINES      += VK_LAYER_PATH=\\\"$$MSYS2_DIR/bin\\\"
 
 # Link the import libs by full path rather than -L$$MSYS2_DIR/lib -lglfw3
 # -lvulkan-1: adding MSYS2's lib/ to the search path lets the unqualified
@@ -49,10 +55,15 @@ CONFIG(debug, debug|release) {
 #QMAKE_EXTRA_TARGETS += shaders_copy
 #POST_TARGETDEPS     += shaders_copy
 
-# Copy the GLFW/Vulkan runtime DLLs next to the built executable so ch00.exe
-# runs standalone, regardless of which MinGW kit (MSYS2 or a Qt-bundled one)
-# built it and without needing MSYS2's bin/ on the run PATH.
+# Copy the GLFW/Vulkan runtime DLLs and validation layer next to the built
+# executable so ch00.exe runs standalone, regardless of which MinGW kit
+# (MSYS2 or a Qt-bundled one) built it and without needing MSYS2's bin/ on
+# the run PATH.
 dlls_copy.commands = $(COPY) \"$$shell_path($$MSYS2_DIR/bin/glfw3.dll)\" \"$$shell_path($$OUT_PWD/$$DEST_SUBDIR)\" $$escape_expand(\\n\\t) \
-                     $(COPY) \"$$shell_path($$MSYS2_DIR/bin/vulkan-1.dll)\" \"$$shell_path($$OUT_PWD/$$DEST_SUBDIR)\"
+                     $(COPY) \"$$shell_path($$MSYS2_DIR/bin/vulkan-1.dll)\" \"$$shell_path($$OUT_PWD/$$DEST_SUBDIR)\" $$escape_expand(\\n\\t) \
+                     $(COPY) \"$$shell_path($$MSYS2_DIR/bin/VkLayer_khronos_validation.dll)\" \"$$shell_path($$OUT_PWD/$$DEST_SUBDIR)\" $$escape_expand(\\n\\t) \
+                     $(COPY) \"$$shell_path($$MSYS2_DIR/bin/VkLayer_khronos_validation.json)\" \"$$shell_path($$OUT_PWD/$$DEST_SUBDIR)\" $$escape_expand(\\n\\t) \
+                     $(COPY) \"$$shell_path($$MSYS2_DIR/bin/libwinpthread-1.dll)\" \"$$shell_path($$OUT_PWD/$$DEST_SUBDIR)\" $$escape_expand(\\n\\t) \
+                     $(COPY) \"$$shell_path($$MSYS2_DIR/bin/libstdc++-6.dll)\" \"$$shell_path($$OUT_PWD/$$DEST_SUBDIR)\"
 QMAKE_EXTRA_TARGETS += dlls_copy
 POST_TARGETDEPS     += dlls_copy

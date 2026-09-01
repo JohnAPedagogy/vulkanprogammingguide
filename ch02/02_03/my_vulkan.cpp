@@ -1,5 +1,9 @@
 #include "my_vulkan.h"
 #include <stddef.h>
+#include <iostream>
+#include <stdlib.h>
+#include <cstdio>
+#include <string>
 
 
 VkInstance m_instance = VK_NULL_HANDLE;
@@ -27,20 +31,20 @@ size_t count_enabled_features(const VkPhysicalDeviceFeatures *features)
 
 VkResult vk_cleanup()
 {
-    if (m_instance != VK_NULL_HANDLE)
+    if (m_device != VK_NULL_HANDLE)
     {
-        vkDestroyInstance(m_instance, nullptr);
-        m_instance = VK_NULL_HANDLE;
+        vkDestroyDevice(m_device, nullptr);
+        m_device = VK_NULL_HANDLE;
     }
     if (m_devices != nullptr)
     {
         free(m_devices);
         m_devices = nullptr;
     }
-    if (m_device != VK_NULL_HANDLE)
+    if (m_instance != VK_NULL_HANDLE)
     {
-        vkDestroyDevice(m_device, nullptr);
-        m_device = VK_NULL_HANDLE;
+        vkDestroyInstance(m_instance, nullptr);
+        m_instance = VK_NULL_HANDLE;
     }
     return VK_SUCCESS;
 }
@@ -54,6 +58,12 @@ VkResult vk_device_init_count(int *count)
 
     VkInstanceCreateInfo instanceCreateInfo = {};
 
+#ifdef ENABLE_VALIDATION
+    const char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"};
+    instanceCreateInfo.enabledLayerCount = 1;
+    instanceCreateInfo.ppEnabledLayerNames = validationLayers;
+#endif
+
     // Generic app info structure
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pApplicationName = "Application";
@@ -65,30 +75,40 @@ VkResult vk_device_init_count(int *count)
     instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     instanceCreateInfo.pApplicationInfo = &appInfo;
 
+    std::cout << "vkCreateInstance called\n";
     result = vkCreateInstance(&instanceCreateInfo, nullptr, &m_instance);
     if (result != VK_SUCCESS)
     {
+        std::cout << "vkCreateInstance failed with result" << result << "\n";
         return VK_NOT_READY;
     }
+    std::cout << "vkCreateInstance succeeded\n";
+
     // First figure out how many devices are in the system
+    std::cout << "vkEnumeratePhysicalDevices called\n";
     uint32_t physicalDevCount = 0;
     result = vkEnumeratePhysicalDevices(m_instance, &physicalDevCount, nullptr);
     if (result != VK_SUCCESS)
     {
+        std::cout << "vkEnumeratePhysicalDevices failed with result " << result << "\n";
         return VK_ERROR_INITIALIZATION_FAILED;
     }
+    std::cout << "vkEnumeratePhysicalDevices found " << physicalDevCount << " devices\n";
+
     // Size the device array appropriately
     // and get the physical device handles.
     // malloc allocation done here
     m_devices = (VkPhysicalDevice*)malloc(sizeof(VkPhysicalDevice) * physicalDevCount);
     if (m_devices != nullptr)
     {
+        std::cout << "malloc succeeded\n";
         vkEnumeratePhysicalDevices(m_instance, &physicalDevCount, &m_devices[0]);
         *count = (int)physicalDevCount;
     }
     else
     {
         result = VK_ERROR_OUT_OF_HOST_MEMORY;
+        std::cout << "malloc failed\n";
     }
 
 
@@ -99,13 +119,13 @@ VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyProperty
 {
     VkResult vkr = VK_INCOMPLETE;
     if(queueFamilyPropertyCount == nullptr || deviceIndex < 0 ||
-        device_count <= deviceIndex)
+        device_count <= deviceIndex || m_devices == nullptr)
     { // invalid device index or no device ready
-        printf("Warning Graphics device not present.");
+        std::cout << "Warning Graphics device not present.\n";
         return VK_NOT_READY;
     }
 
-    VkQueueFamilyProperties* queueFamilyProperties = nullptr; //aray of VkQueueFamilyPoperties requires cleanup
+    VkQueueFamilyProperties* queueFamilyProperties = nullptr; //array of VkQueueFamilyPoperties requires cleanup
     // First determine the number of queue families supported by the physical
     // device.
     vkGetPhysicalDeviceQueueFamilyProperties(
@@ -114,7 +134,7 @@ VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyProperty
         nullptr);
     if(*queueFamilyPropertyCount == 0)
     {
-        printf("Warning Device family not found bailing...\n");
+        std::cout << "Warning Device family not found bailing...\n";
         return VK_ERROR_INITIALIZATION_FAILED;
     }
     // Allocate enough space for the queue property structures.
@@ -138,18 +158,29 @@ VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyProperty
 
 VkResult vk_get_logical_device(int device_index, int *feature_count)
 {
+    if(device_index < 0 || device_index >= device_count || m_devices == nullptr)
+    {
+        std::cout << "Warning: Invalid device index or no device available.\n";
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
     VkResult result;
     VkPhysicalDeviceFeatures supportedFeatures;
     VkPhysicalDeviceFeatures requiredFeatures = {};
 
+    // Get physical device features FIRST before requesting logical device
     vkGetPhysicalDeviceFeatures(m_devices[device_index],
                                 &supportedFeatures);
 
+    // Only request features that are supported by the device
+    // This prevents vkCreateDevice from failing on GPUs without tessellation/geometry shaders
     requiredFeatures.multiDrawIndirect       =
         supportedFeatures.multiDrawIndirect;
-    requiredFeatures.tessellationShader      = VK_TRUE;
-    requiredFeatures.geometryShader          = VK_TRUE;
+    // Only request tessellation/geometry if supported
+    requiredFeatures.tessellationShader      = supportedFeatures.tessellationShader;
+    requiredFeatures.geometryShader          = supportedFeatures.geometryShader;
 
+    const float queuePriority = 1.0f;
     const VkDeviceQueueCreateInfo deviceQueueCreateInfo =
         {
             VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,     // sType
@@ -157,7 +188,7 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
             0,                                               // flags
             0,                                               // queueFamilyIndex
             1,                                               // queueCount
-            nullptr                                          // pQueuePriorities
+            &queuePriority                                    // pQueuePriorities
         };
     *feature_count = (int)count_enabled_features(&supportedFeatures);
     const VkDeviceCreateInfo deviceCreateInfo =
@@ -174,6 +205,12 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
             &requiredFeatures                                 // pEnabledFeatures
         };
 
+    if (m_devices[device_index] == VK_NULL_HANDLE)
+    {
+        std::cout << "Warning: Physical device handle is null.\n";
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
     result = vkCreateDevice(m_devices[device_index],
                             &deviceCreateInfo,
                             nullptr,
@@ -181,12 +218,87 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
 
     if (result != VK_SUCCESS)
     {
-        return VK_ERROR_FEATURE_NOT_PRESENT;
-    }else{
-        return VK_SUCCESS;
+        std::cout << "vkCreateDevice failed with result=" << result << "\n";
+        // If features weren't supported, try without requiring tessellation/geometry
+        if (result == VK_ERROR_FEATURE_NOT_PRESENT)
+        {
+            std::cout << "Attempting device creation without mandatory tessellation/geometry features...\n";
+            requiredFeatures.tessellationShader      = VK_FALSE;
+            requiredFeatures.geometryShader          = VK_FALSE;
+            
+            result = vkCreateDevice(m_devices[device_index],
+                                    &deviceCreateInfo,
+                                    nullptr,
+                                    &m_device);
+        }
+        if (result != VK_SUCCESS)
+        {
+            return VK_ERROR_FEATURE_NOT_PRESENT;
+        }
     }
+    else
+    {
+        std::cout << "vkCreateDevice succeeded\n";
+    }
+    return VK_SUCCESS;
 }
 
+
+VkResult vk_get_layer_properties(int device_index, uint32_t *numInstanceLayers)
+{
+    VkResult vkr = VK_INCOMPLETE;
+    VkLayerProperties* instanceLayerProperties = nullptr;
+    VkLayerProperties* deviceLayerProperties = nullptr;
+
+    if (numInstanceLayers == nullptr)
+        return VK_ERROR_INITIALIZATION_FAILED;
+
+    // Query the instance layers.
+    vkEnumerateInstanceLayerProperties(numInstanceLayers,
+                                       nullptr);
+
+    // If there are any layers, query their properties.
+    if (*numInstanceLayers != 0)
+    {
+        instanceLayerProperties = (VkLayerProperties*)malloc(*numInstanceLayers * sizeof(VkLayerProperties));
+        vkEnumerateInstanceLayerProperties(numInstanceLayers,
+                                           instanceLayerProperties);
+        vkr = VK_SUCCESS;
+    }
+    else
+    {
+        return VK_ERROR_LAYER_NOT_PRESENT;
+    }
+
+    // DEVICE LAYER PROPERTIES
+
+    // Query the device layers.
+    uint32_t deviceLayerCnt;
+    vkEnumerateDeviceLayerProperties(m_devices[device_index],
+                                     &deviceLayerCnt,
+                                       nullptr);
+
+    // If there are any layers, query their properties.
+    if (deviceLayerCnt != 0)
+    {
+        deviceLayerProperties = (VkLayerProperties*)malloc(deviceLayerCnt * sizeof(VkLayerProperties));
+        vkEnumerateDeviceLayerProperties(m_devices[device_index],
+                                         &deviceLayerCnt,
+                                           deviceLayerProperties);
+        vkr = VK_SUCCESS;
+    }
+    else
+    {
+        return VK_ERROR_LAYER_NOT_PRESENT;
+    }
+    std::cout << "Showing "<< *numInstanceLayers <<" Instance layer Properties***\n";
+    dbg_show_layer_property_names(instanceLayerProperties, *numInstanceLayers);
+    std::cout << "\nShowing "<< deviceLayerCnt  << " Device layer Properties***\n";
+    dbg_show_layer_property_names(deviceLayerProperties, deviceLayerCnt);
+    free(deviceLayerProperties);
+    free(instanceLayerProperties);
+    return vkr;
+}
 
 void my_get_device_properties(int device_index)
 {
@@ -194,48 +306,102 @@ void my_get_device_properties(int device_index)
     int rc = vk_get_device_properties(device_index, &dev_prop_count);
     if(rc != VK_SUCCESS)
     {
-        printf("Failed to retrieve device properties\n");
+        std::cout << "Failed to retrieve device properties\n";
     }
     else
     {
-        printf("%d properties found for device[%d]\n",dev_prop_count, device_index );
+        std::cout << dev_prop_count <<" properties found for device[" << device_index << "]\n";
     }
 }
 
 void my_init_vulkan()
 {
-    printf("Checking for physical graphics devices..\n");
+#ifdef ENABLE_VALIDATION
+    // Point the Vulkan loader at the MSYS2 validation layer manifest so it
+    // can find VK_LAYER_KHRONOS_validation without requiring VK_LAYER_PATH
+    // to be set in the calling environment.
+    if (!getenv("VK_LAYER_PATH"))
+    {
+        _putenv_s("VK_LAYER_PATH", VK_LAYER_PATH);
+        std::cout << "VK_LAYER_PATH = " << VK_LAYER_PATH << "\n";
+
+        std::cout << "--- vulkaninfo validation layer check ---\n";
+#ifdef _WIN32
+        std::string cmd = std::string(VK_LAYER_PATH) + "/vulkaninfo.exe --summary 2>&1";
+#else
+        std::string cmd = "vulkaninfo --summary 2>&1";
+#endif
+        FILE *pipe = popen(cmd.c_str(), "r");
+        if (pipe)
+        {
+            char buf[256];
+            while (fgets(buf, sizeof(buf), pipe))
+            {
+                std::string line(buf);
+                // case-insensitive search for "valid" (covers "validation", "Valid", etc.)
+                std::string lower = line;
+                for (auto &c : lower) c = (char)tolower((unsigned char)c);
+                if (lower.find("valid") != std::string::npos)
+                    std::cout << line;
+            }
+            pclose(pipe);
+        }
+        std::cout << "--- end validation check ---\n";
+    }
+#endif
+
+    std::cout << "Checking for physical graphics devices..\n";
     int rc = vk_device_init_count(&device_count);
     if(rc == VK_SUCCESS) {
-        printf("Found %d physical graphics devices.\n", device_count);
+        std::cout << "Found " << device_count << " physical graphics devices.\n";
     }else {
         switch(rc){
         case VK_ERROR_INITIALIZATION_FAILED:
-            printf("Initialisation failed.\n");
+            std::cout << "Initialisation failed.\n";
             break;
         case VK_ERROR_OUT_OF_HOST_MEMORY:
-            printf("Out of host memory.\n");
+            std::cout << "Out of host memory.\n";
             break;
         case VK_NOT_READY:
-            printf("No instance found.\n");
+            std::cout << "No instance found.\n";
             break;
         default:
-            printf("Unkown error code %d", rc);
+            std::cout << "Unkown error code " << rc << "\n";
         }
     }
+    std::cout << "my_init_vulkan completed with  " << rc << "\n";
 }
 
-void my_get_logical_device(int deviceIndex)
+void my_get_logical_device(int device_index)
 {
     int features=0;
-    int device_index=0;
     VkResult vkr = vk_get_logical_device(device_index, &features);
     if(vkr != VK_SUCCESS)
     {
-        printf("Requested graphics feature(s) not supported.");
+        std::cout << "Requested graphics feature(s) not supported.";
     }
     else
     {
-        printf("%d features pesent on device[%d]\n", features, device_index);
+        std::cout << features << " features present on device[" << device_index << "]\n";
     }
+}
+
+void my_get_layer_properties(int deviceIndex)
+{
+    uint32_t layer_count = 0;
+    VkResult vkr = vk_get_layer_properties(deviceIndex, &layer_count);
+    if(vkr == VK_SUCCESS)
+    {
+        std::cout << layer_count << " layers found!\n";
+    }
+    else
+    {
+        std::cout << "Erro: Layer not found!\n";
+    }
+}
+
+void dbg_show_layer_property_names(VkLayerProperties* p, int count)
+{
+    for(int i = 0; i < count; i++)
+        std::cout << p[i].layerName << "\n";
 }
