@@ -1,6 +1,9 @@
 #ifndef _ALLOCATOR_H
 #define _ALLOCATOR_H
 
+#include <cstddef>
+#include <vulkan/vulkan.h>
+
 class vk_allocator
 {
 public:
@@ -57,4 +60,4 @@ private:
         void*                                       pMemory);
 };
 
-#endif // 0201_ALLOCATOR_H
+#endif // _ALLOCATOR_H
