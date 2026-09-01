@@ -1,5 +1,5 @@
-#ifndef _ALLOCATOR_H
-#define _ALLOCATOR_H
+#ifndef VK_ALLOCATOR_H
+#define VK_ALLOCATOR_H
 
 #include <cstddef>
 #include <vulkan/vulkan.h>
@@ -60,4 +60,4 @@ private:
         void*                                       pMemory);
 };
 
-#endif // _ALLOCATOR_H
+#endif // VK_ALLOCATOR_H

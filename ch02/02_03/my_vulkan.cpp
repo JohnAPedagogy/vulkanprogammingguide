@@ -1,4 +1,5 @@
 #include "my_vulkan.h"
+#include "../0201_allocator.h"
 #include <stddef.h>
 #include <iostream>
 #include <stdlib.h>
@@ -12,6 +13,12 @@ VkPhysicalDevice *m_devices = nullptr;
 VkDevice m_device = VK_NULL_HANDLE;
 std::vector<vk_buffer> m_buffers;
 int device_count = 0;
+
+// Host allocation callbacks for buffer/memory objects, tracked via vk_allocator
+// so buffer-related vkCreate*/vkAllocateMemory host allocations go through it
+// instead of the driver's default allocator.
+static vk_allocator g_bufferAllocator;
+static const VkAllocationCallbacks g_bufferAllocCallbacks = g_bufferAllocator;
 
 
 size_t count_enabled_features(const VkPhysicalDeviceFeatures *features)
@@ -34,8 +41,8 @@ VkResult vk_cleanup()
 {
     for (const vk_buffer &buf : m_buffers)
     {
-        vkDestroyBuffer(m_device, buf.handle, nullptr);
-        vkFreeMemory(m_device, buf.memory, nullptr);
+        vkDestroyBuffer(m_device, buf.handle, &g_bufferAllocCallbacks);
+        vkFreeMemory(m_device, buf.memory, &g_bufferAllocCallbacks);
     }
     m_buffers.clear();
     if (m_device != VK_NULL_HANDLE)
@@ -375,7 +382,7 @@ VkResult vk_create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryP
         0, nullptr
     };
 
-    VkResult result = vkCreateBuffer(m_device, &bufferCreateInfo, nullptr, &outBuffer->handle);
+    VkResult result = vkCreateBuffer(m_device, &bufferCreateInfo, &g_bufferAllocCallbacks, &outBuffer->handle);
     if (result != VK_SUCCESS)
     {
         std::cout << "vkCreateBuffer failed with result=" << result << "\n";
@@ -388,7 +395,7 @@ VkResult vk_create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryP
     uint32_t memoryTypeIndex = find_memory_type(memRequirements.memoryTypeBits, properties);
     if (memoryTypeIndex == UINT32_MAX)
     {
-        vkDestroyBuffer(m_device, outBuffer->handle, nullptr);
+        vkDestroyBuffer(m_device, outBuffer->handle, &g_bufferAllocCallbacks);
         outBuffer->handle = VK_NULL_HANDLE;
         return VK_ERROR_INITIALIZATION_FAILED;
     }
@@ -400,19 +407,23 @@ VkResult vk_create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryP
         memoryTypeIndex
     };
 
-    result = vkAllocateMemory(m_device, &allocInfo, nullptr, &outBuffer->memory);
+    result = vkAllocateMemory(m_device, &allocInfo, &g_bufferAllocCallbacks, &outBuffer->memory);
     if (result != VK_SUCCESS)
     {
         std::cout << "vkAllocateMemory failed with result=" << result << "\n";
-        vkDestroyBuffer(m_device, outBuffer->handle, nullptr);
+        vkDestroyBuffer(m_device, outBuffer->handle, &g_bufferAllocCallbacks);
         outBuffer->handle = VK_NULL_HANDLE;
         return result;
     }
 
     vkBindBufferMemory(m_device, outBuffer->handle, outBuffer->memory, 0);
     outBuffer->size = size;
-    m_buffers.push_back(*outBuffer);
     return VK_SUCCESS;
+}
+
+void vk_track_buffer(const vk_buffer &buffer)
+{
+    m_buffers.push_back(buffer);
 }
 
 void my_create_buffer(void)
@@ -424,6 +435,7 @@ void my_create_buffer(void)
                                      &buf);
     if (vkr == VK_SUCCESS)
     {
+        vk_track_buffer(buf);
         std::cout << "Buffer created!\n";
     }
     else
