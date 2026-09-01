@@ -32,7 +32,6 @@ VkResult vk_get_layer_properties(int device_index, uint32_t *numInstanceLayers);
 VkResult vk_get_extensions(uint32_t *numInstanceExtensions);
 VkResult vk_create_command_pool(VkCommandPoolCreateFlags flags, uint32_t queueFamilyIndex, VkCommandPool *outPool);
 VkResult vk_allocate_command_buffers(VkCommandPool pool, uint32_t count, VkCommandBuffer *outBuffers);
-VkResult vk_destroy_command_pool(VkCommandPool pool);
 
 void my_init_vulkan(void);
 void my_get_device_properties(int deviceIndex);

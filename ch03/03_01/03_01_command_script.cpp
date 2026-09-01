@@ -12,13 +12,14 @@ int main()
         std::cout << "No graphics devices found!\n";
         return 0;
     }
-    my_get_device_properties(0);
-    my_get_logical_device(0);
-    my_get_layer_properties(0);
+    int active_device_index = 0;
+    my_get_device_properties(active_device_index);
+    my_get_logical_device(active_device_index);
+    my_get_layer_properties(active_device_index);
     my_get_extensions();
     my_create_image();
-    my_get_device_queue(0, 0);
-    my_create_command_pool(0);
+    my_get_device_queue(active_device_index, 0);
+    my_create_command_pool(active_device_index);
     my_allocate_command_buffer();
     my_record_script();
     my_submit_and_wait();

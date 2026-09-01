@@ -30,9 +30,10 @@ int main()
         // glfwTerminate();
         return 0;
     }
-    my_get_device_properties(0);
-    my_get_logical_device(0);
-    my_get_layer_properties(0);
+    int active_device_index = 0;
+    my_get_device_properties(active_device_index);
+    my_get_logical_device(active_device_index);
+    my_get_layer_properties(active_device_index);
     my_get_extensions();
     my_create_buffer();
     vk_cleanup();

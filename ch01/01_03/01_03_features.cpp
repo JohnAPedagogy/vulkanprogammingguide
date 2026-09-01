@@ -64,17 +64,17 @@ int main()
         printf("No graphics devices found!\n");
         return 0;
     }
-    my_get_device_properties(0);
+    int active_device_index = 0;
+    my_get_device_properties(active_device_index);
     int features=0;
-    int device_index=0;
-    VkResult vkr = vk_get_logical_device(device_index, &features);
+    VkResult vkr = vk_get_logical_device(active_device_index, &features);
     if(vkr != VK_SUCCESS)
     {
         std::cout << "Requested graphics feature(s) not supported.";
     }
     else
     {
-        std::cout << features << " features pesent on device[" << device_index << "]\n";
+        std::cout << features << " features pesent on device[" << active_device_index << "]\n";
     }
     vk_cleanup();
     return 0;

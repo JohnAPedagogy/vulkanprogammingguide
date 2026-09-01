@@ -60,3 +60,56 @@ _deps/
 # IDE
 .vscode/
 .idea/
+
+# Qt / qmake generated
+*.autosave
+*.moc
+*.qm
+*.prl
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+**/.qmake.cache
+**/.qmake.stash
+*.pro.user*
+CMakeLists.txt.user*
+
+# Core dumps
+core
+!core/
+
+# Editor temp / swap
+*~
+*.orig
+*.rej
+.#*
+*.*#
+*.flc
+.*.swp
+tags
+
+# OS metadata
+.DS_Store
+.directory
+Thumbs.db
+
+# MinGW config
+*.Debug
+*.Release
+
+# Python
+*.pyc
+
+# Misc
+*_pch.h.cpp
+*_resource.rc
+*.res
+*.rc
+*.ncb
+*.sdf
+*.opensdf
+*.vcxproj
+*vcxproj.*
+*.vcproj
+*vcproj.*.*.user
+*.ib_pdb_index

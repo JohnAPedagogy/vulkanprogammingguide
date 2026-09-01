@@ -38,8 +38,9 @@ int main()
         std::cout << "No graphics devices found!\n";
         return 0;
     }
-    my_get_device_properties(0);
-    my_get_logical_device(0);
+    int active_device_index = 0;
+    my_get_device_properties(active_device_index);
+    my_get_logical_device(active_device_index);
     uint32_t layer_count = 0;
     VkResult vkr = vk_get_layer_propeties(&layer_count);
     if(vkr == VK_SUCCESS)
