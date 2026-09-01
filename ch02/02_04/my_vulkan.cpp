@@ -11,6 +11,7 @@ VkInstance m_instance = VK_NULL_HANDLE;
 VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
 VkPhysicalDevice *m_devices = nullptr;
 VkDevice m_device = VK_NULL_HANDLE;
+VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
 std::vector<vk_buffer> m_buffers;
 std::vector<vk_image> m_images;
 int device_count = 0;
@@ -44,6 +45,32 @@ size_t count_enabled_features(const VkPhysicalDeviceFeatures *features)
     return count;
 }
 
+#ifdef ENABLE_VALIDATION
+// Plain C function pointer callback - Vulkan delivers validation messages
+// through this, not exceptions (the API has none). Must match
+// PFN_vkDebugUtilsMessengerCallbackEXT exactly and return VK_FALSE (returning
+// VK_TRUE would abort the call that triggered the message, which is a
+// layer-authors-only debugging feature we don't want here).
+static VKAPI_ATTR VkBool32 VKAPI_CALL debug_messenger_callback(
+    VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+    VkDebugUtilsMessageTypeFlagsEXT messageType,
+    const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+    void *pUserData)
+{
+    (void)messageType;
+    (void)pUserData;
+
+    const char *severity = "INFO";
+    if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+        severity = "ERROR";
+    else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+        severity = "WARNING";
+
+    std::cout << "[validation " << severity << "] " << pCallbackData->pMessage << "\n";
+    return VK_FALSE;
+}
+#endif
+
 static uint32_t find_memory_type(uint32_t typeFilter, VkMemoryPropertyFlags properties)
 {
     VkPhysicalDeviceMemoryProperties memProperties;
@@ -76,6 +103,10 @@ VkResult vk_device_init_count(int *count)
     const char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"};
     instanceCreateInfo.enabledLayerCount = 1;
     instanceCreateInfo.ppEnabledLayerNames = validationLayers;
+
+    const char* instanceExtensions[] = {VK_EXT_DEBUG_UTILS_EXTENSION_NAME};
+    instanceCreateInfo.enabledExtensionCount = 1;
+    instanceCreateInfo.ppEnabledExtensionNames = instanceExtensions;
 #endif
 
     // Generic app info structure
@@ -97,6 +128,10 @@ VkResult vk_device_init_count(int *count)
         return VK_NOT_READY;
     }
     std::cout << "vkCreateInstance succeeded\n";
+
+    VkResult debugResult = vk_create_debug_messenger();
+    if (debugResult != VK_SUCCESS)
+        std::cout << "Warning: Debug messenger not active; validation output may not be visible.\n";
 
     // First figure out how many devices are in the system
     std::cout << "vkEnumeratePhysicalDevices called\n";
@@ -127,6 +162,45 @@ VkResult vk_device_init_count(int *count)
 
 
     return result;
+}
+
+VkResult vk_create_debug_messenger(void)
+{
+#ifndef ENABLE_VALIDATION
+    return VK_SUCCESS;
+#else
+    if (m_instance == VK_NULL_HANDLE)
+    {
+        std::cout << "Warning: No instance, cannot create debug messenger.\n";
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    auto createFn = (PFN_vkCreateDebugUtilsMessengerEXT)
+        vkGetInstanceProcAddr(m_instance, "vkCreateDebugUtilsMessengerEXT");
+    if (createFn == nullptr)
+    {
+        std::cout << "Warning: vkCreateDebugUtilsMessengerEXT not available (VK_EXT_debug_utils not enabled?).\n";
+        return VK_ERROR_EXTENSION_NOT_PRESENT;
+    }
+
+    const VkDebugUtilsMessengerCreateInfoEXT createInfo =
+    {
+        VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT, nullptr,
+        0,
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+        VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+        debug_messenger_callback,
+        nullptr
+    };
+
+    VkResult vkr = createFn(m_instance, &createInfo, nullptr, &m_debugMessenger);
+    if (vkr != VK_SUCCESS)
+    {
+        std::cout << "vkCreateDebugUtilsMessengerEXT failed with result=" << vkr << "\n";
+        vkr = VK_ERROR_INITIALIZATION_FAILED;
+    }
+    return vkr;
+#endif
 }
 
 VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyPropertyCount)
@@ -194,6 +268,16 @@ VkResult vk_cleanup()
         free(m_devices);
         m_devices = nullptr;
     }
+#ifdef ENABLE_VALIDATION
+    if (m_debugMessenger != VK_NULL_HANDLE)
+    {
+        auto destroyFn = (PFN_vkDestroyDebugUtilsMessengerEXT)
+            vkGetInstanceProcAddr(m_instance, "vkDestroyDebugUtilsMessengerEXT");
+        if (destroyFn != nullptr)
+            destroyFn(m_instance, m_debugMessenger, nullptr);
+        m_debugMessenger = VK_NULL_HANDLE;
+    }
+#endif
     if (m_instance != VK_NULL_HANDLE)
     {
         vkDestroyInstance(m_instance, nullptr);

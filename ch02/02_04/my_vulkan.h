@@ -17,6 +17,7 @@ extern VkInstance m_instance;
 extern VkPhysicalDevice m_physicalDevice;
 extern VkPhysicalDevice *m_devices;
 extern VkDevice m_device;
+extern VkDebugUtilsMessengerEXT m_debugMessenger;
 extern int device_count;
 
 struct vk_buffer
@@ -40,6 +41,7 @@ extern std::vector<vk_image> m_images;
 size_t count_enabled_features(const VkPhysicalDeviceFeatures *device);
 
 VkResult vk_device_init_count(int *count);
+VkResult vk_create_debug_messenger(void);
 VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyPropertyCount);
 VkResult vk_cleanup();
 VkResult vk_get_logical_device(int device_index, int *feature_count);
