@@ -21,6 +21,8 @@ static vk_allocator g_bufferAllocator;
 static const VkAllocationCallbacks g_bufferAllocCallbacks = g_bufferAllocator;
 
 
+// ---- helper functions ----
+
 size_t count_enabled_features(const VkPhysicalDeviceFeatures *features)
 {
     const VkBool32 *p = (const VkBool32 *)features;
@@ -37,32 +39,25 @@ size_t count_enabled_features(const VkPhysicalDeviceFeatures *features)
     return count;
 }
 
-VkResult vk_cleanup()
+static uint32_t find_memory_type(uint32_t typeFilter, VkMemoryPropertyFlags properties)
 {
-    for (const vk_buffer &buf : m_buffers)
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProperties);
+
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; ++i)
     {
-        vkDestroyBuffer(m_device, buf.handle, &g_bufferAllocCallbacks);
-        vkFreeMemory(m_device, buf.memory, &g_bufferAllocCallbacks);
+        if ((typeFilter & (1u << i)) &&
+            (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
+        {
+            return i;
+        }
     }
-    m_buffers.clear();
-    if (m_device != VK_NULL_HANDLE)
-    {
-        vkDestroyDevice(m_device, nullptr);
-        m_device = VK_NULL_HANDLE;
-    }
-    if (m_devices != nullptr)
-    {
-        free(m_devices);
-        m_devices = nullptr;
-    }
-    if (m_instance != VK_NULL_HANDLE)
-    {
-        vkDestroyInstance(m_instance, nullptr);
-        m_instance = VK_NULL_HANDLE;
-    }
-    return VK_SUCCESS;
+    std::cout << "Warning: No suitable memory type found.\n";
+    return UINT32_MAX;
 }
 
+
+// ---- vk_* functions ----
 
 VkResult vk_device_init_count(int *count)
 {
@@ -167,6 +162,33 @@ VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyProperty
     // cleanup queueFamilyProperties
     free(queueFamilyProperties);
     return vkr;
+}
+
+
+VkResult vk_cleanup()
+{
+    for (const vk_buffer &buf : m_buffers)
+    {
+        vkDestroyBuffer(m_device, buf.handle, &g_bufferAllocCallbacks);
+        vkFreeMemory(m_device, buf.memory, &g_bufferAllocCallbacks);
+    }
+    m_buffers.clear();
+    if (m_device != VK_NULL_HANDLE)
+    {
+        vkDestroyDevice(m_device, nullptr);
+        m_device = VK_NULL_HANDLE;
+    }
+    if (m_devices != nullptr)
+    {
+        free(m_devices);
+        m_devices = nullptr;
+    }
+    if (m_instance != VK_NULL_HANDLE)
+    {
+        vkDestroyInstance(m_instance, nullptr);
+        m_instance = VK_NULL_HANDLE;
+    }
+    return VK_SUCCESS;
 }
 
 
@@ -337,32 +359,6 @@ VkResult vk_get_extensions(uint32_t* numInstanceExtensions)
     return vkr;
 }
 
-void my_get_extensions(void)
-{
-    uint32_t count = 0;
-    VkResult vkr = vk_get_extensions(&count);
-    std::cout << count << " extensions found!\n";
-    if(vkr != VK_SUCCESS)
-        std::cout << "Warning! vk_get_extensions error.";
-}
-
-
-static uint32_t find_memory_type(uint32_t typeFilter, VkMemoryPropertyFlags properties)
-{
-    VkPhysicalDeviceMemoryProperties memProperties;
-    vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProperties);
-
-    for (uint32_t i = 0; i < memProperties.memoryTypeCount; ++i)
-    {
-        if ((typeFilter & (1u << i)) &&
-            (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
-        {
-            return i;
-        }
-    }
-    std::cout << "Warning: No suitable memory type found for buffer.\n";
-    return UINT32_MAX;
-}
 
 VkResult vk_create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, vk_buffer *outBuffer)
 {
@@ -445,37 +441,8 @@ destroy_buffer:
     return vkr;
 }
 
-void my_create_buffer(void)
-{
-    const VkDeviceSize size = 1024 * 1024;
-    vk_buffer buf;
-    VkResult vkr = vk_create_buffer(size,
-                                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                                     &buf);
-    if (vkr == VK_SUCCESS)
-    {
-        vkr = vk_track_buffer(&buf, size,
-                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    }
-    if (vkr == VK_SUCCESS)
-    {
-        std::cout << "Buffer created!\n";
-        return;
-    }
 
-    switch (vkr)
-    {
-    case VK_ERROR_INITIALIZATION_FAILED:
-        std::cout << "Warning: Buffer object could not be created.\n";
-        break;
-    case VK_ERROR_OUT_OF_DEVICE_MEMORY:
-        std::cout << "Warning: Not enough device memory to back buffer.\n";
-        break;
-    default:
-        std::cout << "Warning! vk_create_buffer error=" << vkr << "\n";
-    }
-}
-
+// ---- my_* functions ----
 
 void my_init_vulkan()
 {
@@ -577,6 +544,49 @@ void my_get_layer_properties(int deviceIndex)
         std::cout << "Erro: Layer not found!\n";
     }
 }
+
+void my_get_extensions(void)
+{
+    uint32_t count = 0;
+    VkResult vkr = vk_get_extensions(&count);
+    std::cout << count << " extensions found!\n";
+    if(vkr != VK_SUCCESS)
+        std::cout << "Warning! vk_get_extensions error.";
+}
+
+void my_create_buffer(void)
+{
+    const VkDeviceSize size = 1024 * 1024;
+    vk_buffer buf;
+    VkResult vkr = vk_create_buffer(size,
+                                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                     &buf);
+    if (vkr == VK_SUCCESS)
+    {
+        vkr = vk_track_buffer(&buf, size,
+                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    }
+    if (vkr == VK_SUCCESS)
+    {
+        std::cout << "Buffer created!\n";
+        return;
+    }
+
+    switch (vkr)
+    {
+    case VK_ERROR_INITIALIZATION_FAILED:
+        std::cout << "Warning: Buffer object could not be created.\n";
+        break;
+    case VK_ERROR_OUT_OF_DEVICE_MEMORY:
+        std::cout << "Warning: Not enough device memory to back buffer.\n";
+        break;
+    default:
+        std::cout << "Warning! vk_create_buffer error=" << vkr << "\n";
+    }
+}
+
+
+// ---- dbg_* functions ----
 
 void dbg_show_layer_property_names(VkLayerProperties* p, int count)
 {

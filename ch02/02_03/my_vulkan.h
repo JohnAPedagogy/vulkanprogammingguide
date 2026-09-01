@@ -27,6 +27,9 @@ struct vk_buffer
 };
 extern std::vector<vk_buffer> m_buffers;
 
+// helper functions
+size_t count_enabled_features(const VkPhysicalDeviceFeatures *device);
+
 VkResult vk_device_init_count(int *count);
 VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyPropertyCount);
 VkResult vk_cleanup();
@@ -42,9 +45,6 @@ void my_get_logical_device(int deviceIndex);
 void my_get_layer_properties(int deviceIndex);
 void my_get_extensions(void);
 void my_create_buffer(void);
-
-// helper functions
-size_t count_enabled_features(const VkPhysicalDeviceFeatures *device);
 
 // verbose debug functions
 void dbg_show_layer_property_names(VkLayerProperties* p, int count);
