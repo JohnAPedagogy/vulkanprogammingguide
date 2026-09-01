@@ -348,14 +348,22 @@ VkResult vk_get_extensions(uint32_t* numInstanceExtensions)
                                            numInstanceExtensions,
                                            nullptr);
 
-    // If there are any extensions, query their properties.
-    if (*numInstanceExtensions != 0)
+    if (*numInstanceExtensions == 0)
     {
-        instanceExtensionProperties.resize(*numInstanceExtensions);
-        vkr = vkEnumerateInstanceExtensionProperties(nullptr,
-                                                     numInstanceExtensions,
-                                                     instanceExtensionProperties.data());
+        std::cout << "Warning: No instance extensions found.\n";
+        return VK_ERROR_INITIALIZATION_FAILED;
     }
+
+    instanceExtensionProperties.resize(*numInstanceExtensions);
+    vkr = vkEnumerateInstanceExtensionProperties(nullptr,
+                                                 numInstanceExtensions,
+                                                 instanceExtensionProperties.data());
+    if (vkr != VK_SUCCESS)
+    {
+        std::cout << "vkEnumerateInstanceExtensionProperties failed with result=" << vkr << "\n";
+        vkr = VK_ERROR_INITIALIZATION_FAILED;
+    }
+
     return vkr;
 }
 
@@ -505,29 +513,44 @@ void my_init_vulkan()
 void my_get_device_properties(int device_index)
 {
     uint32_t dev_prop_count = 0;
-    int rc = vk_get_device_properties(device_index, &dev_prop_count);
-    if(rc != VK_SUCCESS)
+    VkResult vkr = vk_get_device_properties(device_index, &dev_prop_count);
+    switch (vkr)
     {
-        std::cout << "Failed to retrieve device properties\n";
-    }
-    else
-    {
-        std::cout << dev_prop_count <<" properties found for device[" << device_index << "]\n";
+    case VK_SUCCESS:
+        std::cout << dev_prop_count << " properties found for device[" << device_index << "]\n";
+        break;
+    case VK_NOT_READY:
+        std::cout << "Warning: Graphics device not present.\n";
+        break;
+    case VK_ERROR_INITIALIZATION_FAILED:
+        std::cout << "Warning: Device queue family not found.\n";
+        break;
+    case VK_ERROR_OUT_OF_HOST_MEMORY:
+        std::cout << "Warning: Out of host memory retrieving device properties.\n";
+        break;
+    default:
+        std::cout << "Warning! vk_get_device_properties error=" << vkr << "\n";
     }
 }
 
 
 void my_get_logical_device(int device_index)
 {
-    int features=0;
+    int features = 0;
     VkResult vkr = vk_get_logical_device(device_index, &features);
-    if(vkr != VK_SUCCESS)
+    switch (vkr)
     {
-        std::cout << "Requested graphics feature(s) not supported.";
-    }
-    else
-    {
+    case VK_SUCCESS:
         std::cout << features << " features present on device[" << device_index << "]\n";
+        break;
+    case VK_ERROR_INITIALIZATION_FAILED:
+        std::cout << "Warning: Invalid device index or no device available.\n";
+        break;
+    case VK_ERROR_FEATURE_NOT_PRESENT:
+        std::cout << "Warning: Requested graphics feature(s) not supported.\n";
+        break;
+    default:
+        std::cout << "Warning! vk_get_logical_device error=" << vkr << "\n";
     }
 }
 
@@ -535,13 +558,19 @@ void my_get_layer_properties(int deviceIndex)
 {
     uint32_t layer_count = 0;
     VkResult vkr = vk_get_layer_properties(deviceIndex, &layer_count);
-    if(vkr == VK_SUCCESS)
+    switch (vkr)
     {
+    case VK_SUCCESS:
         std::cout << layer_count << " layers found!\n";
-    }
-    else
-    {
-        std::cout << "Erro: Layer not found!\n";
+        break;
+    case VK_ERROR_INITIALIZATION_FAILED:
+        std::cout << "Warning: Invalid layer count pointer.\n";
+        break;
+    case VK_ERROR_LAYER_NOT_PRESENT:
+        std::cout << "Warning: No instance or device layers present.\n";
+        break;
+    default:
+        std::cout << "Warning! vk_get_layer_properties error=" << vkr << "\n";
     }
 }
 
@@ -549,9 +578,17 @@ void my_get_extensions(void)
 {
     uint32_t count = 0;
     VkResult vkr = vk_get_extensions(&count);
-    std::cout << count << " extensions found!\n";
-    if(vkr != VK_SUCCESS)
-        std::cout << "Warning! vk_get_extensions error.";
+    switch (vkr)
+    {
+    case VK_SUCCESS:
+        std::cout << count << " extensions found!\n";
+        break;
+    case VK_ERROR_INITIALIZATION_FAILED:
+        std::cout << "Warning: Could not retrieve instance extensions.\n";
+        break;
+    default:
+        std::cout << "Warning! vk_get_extensions error=" << vkr << "\n";
+    }
 }
 
 void my_create_buffer(void)

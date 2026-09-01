@@ -1,5 +1,5 @@
 #include "my_vulkan.h"
-#include "../0201_allocator.h"
+#include "../../ch02/0201_allocator.h"
 #include <stddef.h>
 #include <iostream>
 #include <stdlib.h>
@@ -12,19 +12,26 @@ VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
 VkPhysicalDevice *m_devices = nullptr;
 VkDevice m_device = VK_NULL_HANDLE;
 VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
-std::vector<vk_buffer> m_buffers;
+VkQueue m_graphicsQueue = VK_NULL_HANDLE;
+VkCommandPool m_commandPool = VK_NULL_HANDLE;
+VkCommandBuffer m_commandBuffer = VK_NULL_HANDLE;
 std::vector<vk_image> m_images;
 int device_count = 0;
 
-// Host allocation callbacks for buffer/memory objects, tracked via vk_allocator
-// so buffer-related vkCreate*/vkAllocateMemory host allocations go through it
-// instead of the driver's default allocator.
-static vk_allocator g_bufferAllocator;
-static const VkAllocationCallbacks g_bufferAllocCallbacks = g_bufferAllocator;
+// Hardcoded graphics queue family index. 02_03/02_04's vk_get_logical_device
+// only ever requests queue family 0, so this project never picks a family -
+// it assumes index 0 supports graphics, matching that existing convention.
+static const uint32_t GRAPHICS_QUEUE_FAMILY_INDEX = 0;
 
-// Same idea, separate instance, for image/image-memory host allocations.
+// Host allocation callbacks for image/memory objects, tracked via vk_allocator
+// so image-related vkCreate*/vkAllocateMemory host allocations go through it
+// instead of the driver's default allocator.
 static vk_allocator g_imageAllocator;
 static const VkAllocationCallbacks g_imageAllocCallbacks = g_imageAllocator;
+
+// Same idea, separate instance, for command-pool host allocations.
+static vk_allocator g_cmdAllocator;
+static const VkAllocationCallbacks g_cmdAllocCallbacks = g_cmdAllocator;
 
 
 // ---- helper functions ----
@@ -246,18 +253,20 @@ VkResult vk_get_device_properties(int deviceIndex, uint32_t *queueFamilyProperty
 
 VkResult vk_cleanup()
 {
+    if (m_commandPool != VK_NULL_HANDLE)
+    {
+        // Freeing the pool implicitly frees every command buffer allocated
+        // from it, including m_commandBuffer - no separate vkFreeCommandBuffers call needed.
+        vkDestroyCommandPool(m_device, m_commandPool, &g_cmdAllocCallbacks);
+        m_commandPool = VK_NULL_HANDLE;
+        m_commandBuffer = VK_NULL_HANDLE;
+    }
     for (const vk_image &img : m_images)
     {
         vkDestroyImage(m_device, img.handle, &g_imageAllocCallbacks);
         vkFreeMemory(m_device, img.memory, &g_imageAllocCallbacks);
     }
     m_images.clear();
-    for (const vk_buffer &buf : m_buffers)
-    {
-        vkDestroyBuffer(m_device, buf.handle, &g_bufferAllocCallbacks);
-        vkFreeMemory(m_device, buf.memory, &g_bufferAllocCallbacks);
-    }
-    m_buffers.clear();
     if (m_device != VK_NULL_HANDLE)
     {
         vkDestroyDevice(m_device, nullptr);
@@ -443,106 +452,17 @@ VkResult vk_get_extensions(uint32_t* numInstanceExtensions)
                                            numInstanceExtensions,
                                            nullptr);
 
-    if (*numInstanceExtensions == 0)
+    // If there are any extensions, query their properties.
+    if (*numInstanceExtensions != 0)
     {
-        std::cout << "Warning: No instance extensions found.\n";
-        return VK_ERROR_INITIALIZATION_FAILED;
+        instanceExtensionProperties.resize(*numInstanceExtensions);
+        vkr = vkEnumerateInstanceExtensionProperties(nullptr,
+                                                     numInstanceExtensions,
+                                                     instanceExtensionProperties.data());
     }
-
-    instanceExtensionProperties.resize(*numInstanceExtensions);
-    vkr = vkEnumerateInstanceExtensionProperties(nullptr,
-                                                 numInstanceExtensions,
-                                                 instanceExtensionProperties.data());
-    if (vkr != VK_SUCCESS)
-    {
-        std::cout << "vkEnumerateInstanceExtensionProperties failed with result=" << vkr << "\n";
-        vkr = VK_ERROR_INITIALIZATION_FAILED;
-    }
-
     return vkr;
 }
 
-
-VkResult vk_create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, vk_buffer *outBuffer)
-{
-    VkResult vkr = VK_INCOMPLETE;
-
-    if (m_device == VK_NULL_HANDLE)
-    {
-        std::cout << "Warning: No logical device, cannot create buffer.\n";
-        return VK_ERROR_INITIALIZATION_FAILED;
-    }
-
-    const VkBufferCreateInfo bufferCreateInfo =
-    {
-        VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, nullptr,
-        0,
-        size,
-        usage,
-        VK_SHARING_MODE_EXCLUSIVE,
-        0, nullptr
-    };
-
-    vkr = vkCreateBuffer(m_device, &bufferCreateInfo, &g_bufferAllocCallbacks, &outBuffer->handle);
-    if (vkr != VK_SUCCESS)
-    {
-        std::cout << "vkCreateBuffer failed with result=" << vkr << "\n";
-        vkr = VK_ERROR_INITIALIZATION_FAILED;
-    }
-
-    return vkr;
-}
-
-VkResult vk_track_buffer(vk_buffer *buffer, VkDeviceSize size, VkMemoryPropertyFlags properties)
-{
-    VkResult vkr = VK_INCOMPLETE;
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(m_device, buffer->handle, &memRequirements);
-
-    uint32_t memoryTypeIndex = find_memory_type(memRequirements.memoryTypeBits, properties);
-    if (memoryTypeIndex == UINT32_MAX)
-    {
-        vkr = VK_ERROR_INITIALIZATION_FAILED;
-        goto destroy_buffer;
-    }
-
-    {
-        const VkMemoryAllocateInfo allocInfo =
-        {
-            VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, nullptr,
-            memRequirements.size,
-            memoryTypeIndex
-        };
-
-        vkr = vkAllocateMemory(m_device, &allocInfo, &g_bufferAllocCallbacks, &buffer->memory);
-        if (vkr != VK_SUCCESS)
-        {
-            std::cout << "vkAllocateMemory failed with result=" << vkr << "\n";
-            vkr = VK_ERROR_OUT_OF_DEVICE_MEMORY;
-            goto destroy_buffer;
-        }
-    }
-
-    vkr = vkBindBufferMemory(m_device, buffer->handle, buffer->memory, 0);
-    if (vkr != VK_SUCCESS)
-    {
-        std::cout << "vkBindBufferMemory failed with result=" << vkr << "\n";
-        vkr = VK_ERROR_OUT_OF_DEVICE_MEMORY;
-        goto free_memory;
-    }
-
-    buffer->size = size;
-    m_buffers.push_back(*buffer);
-    return vkr;
-
-free_memory:
-    vkFreeMemory(m_device, buffer->memory, &g_bufferAllocCallbacks);
-    buffer->memory = VK_NULL_HANDLE;
-destroy_buffer:
-    vkDestroyBuffer(m_device, buffer->handle, &g_bufferAllocCallbacks);
-    buffer->handle = VK_NULL_HANDLE;
-    return vkr;
-}
 
 VkResult vk_create_image(VkFormat format, VkExtent3D extent, VkImageUsageFlags usage, vk_image *outImage)
 {
@@ -556,14 +476,13 @@ VkResult vk_create_image(VkFormat format, VkExtent3D extent, VkImageUsageFlags u
 
     // Format support must be checked before creation for the requested
     // tiling/usage combination - not every format supports every usage on
-    // every device (e.g. some formats aren't sampleable on some GPUs).
+    // every device.
     VkFormatProperties formatProperties;
     vkGetPhysicalDeviceFormatProperties(m_physicalDevice, format, &formatProperties);
-    const VkFormatFeatureFlags requiredFeatures =
-        VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+    const VkFormatFeatureFlags requiredFeatures = VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
     if ((formatProperties.optimalTilingFeatures & requiredFeatures) != requiredFeatures)
     {
-        std::cout << "Warning: Requested format does not support sampled+transfer-dst optimal tiling.\n";
+        std::cout << "Warning: Requested format does not support transfer-dst optimal tiling.\n";
         return VK_ERROR_FORMAT_NOT_SUPPORTED;
     }
 
@@ -647,6 +566,161 @@ destroy_image:
     return vkr;
 }
 
+VkResult vk_get_device_queue(uint32_t queueFamilyIndex, uint32_t queueIndex, VkQueue *outQueue)
+{
+    if (m_device == VK_NULL_HANDLE)
+    {
+        std::cout << "Warning: No logical device, cannot get queue.\n";
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    // vkGetDeviceQueue has no return value - it cannot itself fail once the
+    // device and family/index are valid, so this wrapper's only fallible
+    // outcome is the precondition above.
+    vkGetDeviceQueue(m_device, queueFamilyIndex, queueIndex, outQueue);
+    return VK_SUCCESS;
+}
+
+VkResult vk_create_command_pool(uint32_t queueFamilyIndex, VkCommandPool *outPool)
+{
+    VkResult vkr = VK_INCOMPLETE;
+
+    if (m_device == VK_NULL_HANDLE)
+    {
+        std::cout << "Warning: No logical device, cannot create command pool.\n";
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    const VkCommandPoolCreateInfo poolCreateInfo =
+    {
+        VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr,
+        0,
+        queueFamilyIndex
+    };
+
+    vkr = vkCreateCommandPool(m_device, &poolCreateInfo, &g_cmdAllocCallbacks, outPool);
+    if (vkr != VK_SUCCESS)
+    {
+        std::cout << "vkCreateCommandPool failed with result=" << vkr << "\n";
+        vkr = VK_ERROR_INITIALIZATION_FAILED;
+    }
+    return vkr;
+}
+
+VkResult vk_allocate_command_buffer(VkCommandPool pool, VkCommandBuffer *outBuffer)
+{
+    VkResult vkr = VK_INCOMPLETE;
+
+    if (pool == VK_NULL_HANDLE)
+    {
+        std::cout << "Warning: No command pool, cannot allocate command buffer.\n";
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    const VkCommandBufferAllocateInfo allocInfo =
+    {
+        VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, nullptr,
+        pool,
+        VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        1
+    };
+
+    vkr = vkAllocateCommandBuffers(m_device, &allocInfo, outBuffer);
+    if (vkr != VK_SUCCESS)
+    {
+        std::cout << "vkAllocateCommandBuffers failed with result=" << vkr << "\n";
+        vkr = VK_ERROR_INITIALIZATION_FAILED;
+    }
+    return vkr;
+}
+
+VkResult vk_record_script(VkCommandBuffer commandBuffer, VkImage image)
+{
+    const VkCommandBufferBeginInfo begin =
+    {
+        VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, nullptr,
+        0, nullptr
+    };
+
+    VkResult vkr = vkBeginCommandBuffer(commandBuffer, &begin);
+    if (vkr != VK_SUCCESS)
+    {
+        std::cout << "vkBeginCommandBuffer failed with result=" << vkr << "\n";
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    // The book's listing assumes the image is "already created for
+    // transfer-destination use"; vk_create_image above only creates it in
+    // VK_IMAGE_LAYOUT_UNDEFINED, so a real runnable program needs an
+    // explicit layout transition here before the clear is legal - this
+    // barrier is not in the book listing, added so the recorded script
+    // doesn't trip validation the moment it is submitted.
+    const VkImageSubresourceRange range = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+    const VkImageMemoryBarrier toTransferDst =
+    {
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, nullptr,
+        0, VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+        image,
+        range
+    };
+    vkCmdPipelineBarrier(commandBuffer,
+                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                          0,
+                          0, nullptr,
+                          0, nullptr,
+                          1, &toTransferDst);
+
+    const VkClearColorValue color = {{0.1f, 0.2f, 0.3f, 1.0f}};
+    vkCmdClearColorImage(commandBuffer, image,
+                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                          &color, 1, &range);
+
+    vkr = vkEndCommandBuffer(commandBuffer);
+    std::cout << "recorded script: " << (vkr == VK_SUCCESS ? "yes" : "no") << "\n";
+    if (vkr != VK_SUCCESS)
+    {
+        std::cout << "vkEndCommandBuffer failed with result=" << vkr << "\n";
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+    return vkr;
+}
+
+VkResult vk_submit_and_wait(VkQueue queue, VkCommandBuffer commandBuffer)
+{
+    if (queue == VK_NULL_HANDLE)
+    {
+        std::cout << "Warning: No queue, cannot submit.\n";
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    const VkSubmitInfo submit =
+    {
+        VK_STRUCTURE_TYPE_SUBMIT_INFO, nullptr,
+        0, nullptr, nullptr,
+        1, &commandBuffer,
+        0, nullptr
+    };
+
+    VkResult vkr = vkQueueSubmit(queue, 1, &submit, VK_NULL_HANDLE);
+    if (vkr != VK_SUCCESS)
+    {
+        std::cout << "vkQueueSubmit failed with result=" << vkr << "\n";
+        return VK_ERROR_DEVICE_LOST;
+    }
+
+    // No fence yet in this lesson (that's introduced in 3.4) - a full queue
+    // wait is the simplest correct way to observe completion here.
+    vkr = vkQueueWaitIdle(queue);
+    if (vkr != VK_SUCCESS)
+    {
+        std::cout << "vkQueueWaitIdle failed with result=" << vkr << "\n";
+        return VK_ERROR_DEVICE_LOST;
+    }
+    return vkr;
+}
+
 
 // ---- my_* functions ----
 
@@ -711,44 +785,29 @@ void my_init_vulkan()
 void my_get_device_properties(int device_index)
 {
     uint32_t dev_prop_count = 0;
-    VkResult vkr = vk_get_device_properties(device_index, &dev_prop_count);
-    switch (vkr)
+    int rc = vk_get_device_properties(device_index, &dev_prop_count);
+    if(rc != VK_SUCCESS)
     {
-    case VK_SUCCESS:
-        std::cout << dev_prop_count << " properties found for device[" << device_index << "]\n";
-        break;
-    case VK_NOT_READY:
-        std::cout << "Warning: Graphics device not present.\n";
-        break;
-    case VK_ERROR_INITIALIZATION_FAILED:
-        std::cout << "Warning: Device queue family not found.\n";
-        break;
-    case VK_ERROR_OUT_OF_HOST_MEMORY:
-        std::cout << "Warning: Out of host memory retrieving device properties.\n";
-        break;
-    default:
-        std::cout << "Warning! vk_get_device_properties error=" << vkr << "\n";
+        std::cout << "Failed to retrieve device properties\n";
+    }
+    else
+    {
+        std::cout << dev_prop_count <<" properties found for device[" << device_index << "]\n";
     }
 }
 
 
 void my_get_logical_device(int device_index)
 {
-    int features = 0;
+    int features=0;
     VkResult vkr = vk_get_logical_device(device_index, &features);
-    switch (vkr)
+    if(vkr != VK_SUCCESS)
     {
-    case VK_SUCCESS:
+        std::cout << "Requested graphics feature(s) not supported.";
+    }
+    else
+    {
         std::cout << features << " features present on device[" << device_index << "]\n";
-        break;
-    case VK_ERROR_INITIALIZATION_FAILED:
-        std::cout << "Warning: Invalid device index or no device available.\n";
-        break;
-    case VK_ERROR_FEATURE_NOT_PRESENT:
-        std::cout << "Warning: Requested graphics feature(s) not supported.\n";
-        break;
-    default:
-        std::cout << "Warning! vk_get_logical_device error=" << vkr << "\n";
     }
 }
 
@@ -756,19 +815,13 @@ void my_get_layer_properties(int deviceIndex)
 {
     uint32_t layer_count = 0;
     VkResult vkr = vk_get_layer_properties(deviceIndex, &layer_count);
-    switch (vkr)
+    if(vkr == VK_SUCCESS)
     {
-    case VK_SUCCESS:
         std::cout << layer_count << " layers found!\n";
-        break;
-    case VK_ERROR_INITIALIZATION_FAILED:
-        std::cout << "Warning: Invalid layer count pointer.\n";
-        break;
-    case VK_ERROR_LAYER_NOT_PRESENT:
-        std::cout << "Warning: No instance or device layers present.\n";
-        break;
-    default:
-        std::cout << "Warning! vk_get_layer_properties error=" << vkr << "\n";
+    }
+    else
+    {
+        std::cout << "Erro: Layer not found!\n";
     }
 }
 
@@ -776,48 +829,9 @@ void my_get_extensions(void)
 {
     uint32_t count = 0;
     VkResult vkr = vk_get_extensions(&count);
-    switch (vkr)
-    {
-    case VK_SUCCESS:
-        std::cout << count << " extensions found!\n";
-        break;
-    case VK_ERROR_INITIALIZATION_FAILED:
-        std::cout << "Warning: Could not retrieve instance extensions.\n";
-        break;
-    default:
-        std::cout << "Warning! vk_get_extensions error=" << vkr << "\n";
-    }
-}
-
-void my_create_buffer(void)
-{
-    const VkDeviceSize size = 1024 * 1024;
-    vk_buffer buf;
-    VkResult vkr = vk_create_buffer(size,
-                                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                                     &buf);
-    if (vkr == VK_SUCCESS)
-    {
-        vkr = vk_track_buffer(&buf, size,
-                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    }
-    if (vkr == VK_SUCCESS)
-    {
-        std::cout << "Buffer created!\n";
-        return;
-    }
-
-    switch (vkr)
-    {
-    case VK_ERROR_INITIALIZATION_FAILED:
-        std::cout << "Warning: Buffer object could not be created.\n";
-        break;
-    case VK_ERROR_OUT_OF_DEVICE_MEMORY:
-        std::cout << "Warning: Not enough device memory to back buffer.\n";
-        break;
-    default:
-        std::cout << "Warning! vk_create_buffer error=" << vkr << "\n";
-    }
+    std::cout << count << " extensions found!\n";
+    if(vkr != VK_SUCCESS)
+        std::cout << "Warning! vk_get_extensions error.";
 }
 
 void my_create_image(void)
@@ -825,7 +839,7 @@ void my_create_image(void)
     const VkExtent3D extent = { 512, 512, 1 };
     vk_image img;
     VkResult vkr = vk_create_image(VK_FORMAT_R8G8B8A8_UNORM, extent,
-                                    VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                                    VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                                     &img);
     if (vkr == VK_SUCCESS)
     {
@@ -851,6 +865,63 @@ void my_create_image(void)
     default:
         std::cout << "Warning! vk_create_image error=" << vkr << "\n";
     }
+}
+
+void my_get_device_queue(uint32_t queueFamilyIndex, uint32_t queueIndex)
+{
+    VkResult vkr = vk_get_device_queue(queueFamilyIndex, queueIndex, &m_graphicsQueue);
+    if (vkr == VK_SUCCESS)
+    {
+        std::cout << "Graphics queue retrieved!\n";
+        return;
+    }
+    std::cout << "Warning: Graphics queue could not be retrieved, error=" << vkr << "\n";
+}
+
+void my_create_command_pool(uint32_t queueFamilyIndex)
+{
+    VkResult vkr = vk_create_command_pool(queueFamilyIndex, &m_commandPool);
+    if (vkr == VK_SUCCESS)
+    {
+        std::cout << "Command pool created!\n";
+        return;
+    }
+    std::cout << "Warning: Command pool could not be created, error=" << vkr << "\n";
+}
+
+void my_allocate_command_buffer(void)
+{
+    VkResult vkr = vk_allocate_command_buffer(m_commandPool, &m_commandBuffer);
+    if (vkr == VK_SUCCESS)
+    {
+        std::cout << "Command buffer allocated!\n";
+        return;
+    }
+    std::cout << "Warning: Command buffer could not be allocated, error=" << vkr << "\n";
+}
+
+void my_record_script(void)
+{
+    if (m_images.empty())
+    {
+        std::cout << "Warning: No image tracked, cannot record script.\n";
+        return;
+    }
+
+    VkResult vkr = vk_record_script(m_commandBuffer, m_images[0].handle);
+    if (vkr != VK_SUCCESS)
+        std::cout << "Warning: Script recording failed, error=" << vkr << "\n";
+}
+
+void my_submit_and_wait(void)
+{
+    VkResult vkr = vk_submit_and_wait(m_graphicsQueue, m_commandBuffer);
+    if (vkr == VK_SUCCESS)
+    {
+        std::cout << "Script submitted and completed!\n";
+        return;
+    }
+    std::cout << "Warning: Submission did not complete, error=" << vkr << "\n";
 }
 
 
