@@ -10,6 +10,7 @@ VkInstance m_instance = VK_NULL_HANDLE;
 VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
 VkPhysicalDevice *m_devices = nullptr;
 VkDevice m_device = VK_NULL_HANDLE;
+std::vector<vk_buffer> m_buffers;
 int device_count = 0;
 
 
@@ -31,6 +32,12 @@ size_t count_enabled_features(const VkPhysicalDeviceFeatures *features)
 
 VkResult vk_cleanup()
 {
+    for (const vk_buffer &buf : m_buffers)
+    {
+        vkDestroyBuffer(m_device, buf.handle, nullptr);
+        vkFreeMemory(m_device, buf.memory, nullptr);
+    }
+    m_buffers.clear();
     if (m_device != VK_NULL_HANDLE)
     {
         vkDestroyDevice(m_device, nullptr);
@@ -225,7 +232,7 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
             std::cout << "Attempting device creation without mandatory tessellation/geometry features...\n";
             requiredFeatures.tessellationShader      = VK_FALSE;
             requiredFeatures.geometryShader          = VK_FALSE;
-            
+
             result = vkCreateDevice(m_devices[device_index],
                                     &deviceCreateInfo,
                                     nullptr,
@@ -240,6 +247,7 @@ VkResult vk_get_logical_device(int device_index, int *feature_count)
     {
         std::cout << "vkCreateDevice succeeded\n";
     }
+    m_physicalDevice = m_devices[device_index];
     return VK_SUCCESS;
 }
 
@@ -300,19 +308,130 @@ VkResult vk_get_layer_properties(int device_index, uint32_t *numInstanceLayers)
     return vkr;
 }
 
-void my_get_device_properties(int device_index)
+
+VkResult vk_get_extensions(uint32_t* numInstanceExtensions)
 {
-    uint32_t dev_prop_count = 0;
-    int rc = vk_get_device_properties(device_index, &dev_prop_count);
-    if(rc != VK_SUCCESS)
+    VkResult vkr = VK_INCOMPLETE;
+    std::vector<VkExtensionProperties> instanceExtensionProperties;
+
+    // Query the instance extensions.
+    vkEnumerateInstanceExtensionProperties(nullptr,
+                                           numInstanceExtensions,
+                                           nullptr);
+
+    // If there are any extensions, query their properties.
+    if (*numInstanceExtensions != 0)
     {
-        std::cout << "Failed to retrieve device properties\n";
+        instanceExtensionProperties.resize(*numInstanceExtensions);
+        vkr = vkEnumerateInstanceExtensionProperties(nullptr,
+                                                     numInstanceExtensions,
+                                                     instanceExtensionProperties.data());
+    }
+    return vkr;
+}
+
+void my_get_extensions(void)
+{
+    uint32_t count = 0;
+    VkResult vkr = vk_get_extensions(&count);
+    std::cout << count << " extensions found!\n";
+    if(vkr != VK_SUCCESS)
+        std::cout << "Warning! vk_get_extensions error.";
+}
+
+
+static uint32_t find_memory_type(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+{
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProperties);
+
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; ++i)
+    {
+        if ((typeFilter & (1u << i)) &&
+            (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
+        {
+            return i;
+        }
+    }
+    std::cout << "Warning: No suitable memory type found for buffer.\n";
+    return UINT32_MAX;
+}
+
+VkResult vk_create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, vk_buffer *outBuffer)
+{
+    if (m_device == VK_NULL_HANDLE)
+    {
+        std::cout << "Warning: No logical device, cannot create buffer.\n";
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    const VkBufferCreateInfo bufferCreateInfo =
+    {
+        VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, nullptr,
+        0,
+        size,
+        usage,
+        VK_SHARING_MODE_EXCLUSIVE,
+        0, nullptr
+    };
+
+    VkResult result = vkCreateBuffer(m_device, &bufferCreateInfo, nullptr, &outBuffer->handle);
+    if (result != VK_SUCCESS)
+    {
+        std::cout << "vkCreateBuffer failed with result=" << result << "\n";
+        return result;
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(m_device, outBuffer->handle, &memRequirements);
+
+    uint32_t memoryTypeIndex = find_memory_type(memRequirements.memoryTypeBits, properties);
+    if (memoryTypeIndex == UINT32_MAX)
+    {
+        vkDestroyBuffer(m_device, outBuffer->handle, nullptr);
+        outBuffer->handle = VK_NULL_HANDLE;
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    const VkMemoryAllocateInfo allocInfo =
+    {
+        VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, nullptr,
+        memRequirements.size,
+        memoryTypeIndex
+    };
+
+    result = vkAllocateMemory(m_device, &allocInfo, nullptr, &outBuffer->memory);
+    if (result != VK_SUCCESS)
+    {
+        std::cout << "vkAllocateMemory failed with result=" << result << "\n";
+        vkDestroyBuffer(m_device, outBuffer->handle, nullptr);
+        outBuffer->handle = VK_NULL_HANDLE;
+        return result;
+    }
+
+    vkBindBufferMemory(m_device, outBuffer->handle, outBuffer->memory, 0);
+    outBuffer->size = size;
+    m_buffers.push_back(*outBuffer);
+    return VK_SUCCESS;
+}
+
+void my_create_buffer(void)
+{
+    vk_buffer buf;
+    VkResult vkr = vk_create_buffer(1024 * 1024,
+                                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                     &buf);
+    if (vkr == VK_SUCCESS)
+    {
+        std::cout << "Buffer created!\n";
     }
     else
     {
-        std::cout << dev_prop_count <<" properties found for device[" << device_index << "]\n";
+        std::cout << "Warning! vk_create_buffer error=" << vkr << "\n";
     }
 }
+
 
 void my_init_vulkan()
 {
@@ -371,6 +490,21 @@ void my_init_vulkan()
     }
     std::cout << "my_init_vulkan completed with  " << rc << "\n";
 }
+
+void my_get_device_properties(int device_index)
+{
+    uint32_t dev_prop_count = 0;
+    int rc = vk_get_device_properties(device_index, &dev_prop_count);
+    if(rc != VK_SUCCESS)
+    {
+        std::cout << "Failed to retrieve device properties\n";
+    }
+    else
+    {
+        std::cout << dev_prop_count <<" properties found for device[" << device_index << "]\n";
+    }
+}
+
 
 void my_get_logical_device(int device_index)
 {
