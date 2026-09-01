@@ -364,8 +364,10 @@ static uint32_t find_memory_type(uint32_t typeFilter, VkMemoryPropertyFlags prop
     return UINT32_MAX;
 }
 
-VkResult vk_create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, vk_buffer *outBuffer)
+VkResult vk_create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, vk_buffer *outBuffer)
 {
+    VkResult vkr = VK_INCOMPLETE;
+
     if (m_device == VK_NULL_HANDLE)
     {
         std::cout << "Warning: No logical device, cannot create buffer.\n";
@@ -382,64 +384,94 @@ VkResult vk_create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryP
         0, nullptr
     };
 
-    VkResult result = vkCreateBuffer(m_device, &bufferCreateInfo, &g_bufferAllocCallbacks, &outBuffer->handle);
-    if (result != VK_SUCCESS)
+    vkr = vkCreateBuffer(m_device, &bufferCreateInfo, &g_bufferAllocCallbacks, &outBuffer->handle);
+    if (vkr != VK_SUCCESS)
     {
-        std::cout << "vkCreateBuffer failed with result=" << result << "\n";
-        return result;
+        std::cout << "vkCreateBuffer failed with result=" << vkr << "\n";
+        vkr = VK_ERROR_INITIALIZATION_FAILED;
     }
 
+    return vkr;
+}
+
+VkResult vk_track_buffer(vk_buffer *buffer, VkDeviceSize size, VkMemoryPropertyFlags properties)
+{
+    VkResult vkr = VK_INCOMPLETE;
     VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(m_device, outBuffer->handle, &memRequirements);
+    vkGetBufferMemoryRequirements(m_device, buffer->handle, &memRequirements);
 
     uint32_t memoryTypeIndex = find_memory_type(memRequirements.memoryTypeBits, properties);
     if (memoryTypeIndex == UINT32_MAX)
     {
-        vkDestroyBuffer(m_device, outBuffer->handle, &g_bufferAllocCallbacks);
-        outBuffer->handle = VK_NULL_HANDLE;
-        return VK_ERROR_INITIALIZATION_FAILED;
+        vkr = VK_ERROR_INITIALIZATION_FAILED;
+        goto destroy_buffer;
     }
 
-    const VkMemoryAllocateInfo allocInfo =
     {
-        VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, nullptr,
-        memRequirements.size,
-        memoryTypeIndex
-    };
+        const VkMemoryAllocateInfo allocInfo =
+        {
+            VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, nullptr,
+            memRequirements.size,
+            memoryTypeIndex
+        };
 
-    result = vkAllocateMemory(m_device, &allocInfo, &g_bufferAllocCallbacks, &outBuffer->memory);
-    if (result != VK_SUCCESS)
-    {
-        std::cout << "vkAllocateMemory failed with result=" << result << "\n";
-        vkDestroyBuffer(m_device, outBuffer->handle, &g_bufferAllocCallbacks);
-        outBuffer->handle = VK_NULL_HANDLE;
-        return result;
+        vkr = vkAllocateMemory(m_device, &allocInfo, &g_bufferAllocCallbacks, &buffer->memory);
+        if (vkr != VK_SUCCESS)
+        {
+            std::cout << "vkAllocateMemory failed with result=" << vkr << "\n";
+            vkr = VK_ERROR_OUT_OF_DEVICE_MEMORY;
+            goto destroy_buffer;
+        }
     }
 
-    vkBindBufferMemory(m_device, outBuffer->handle, outBuffer->memory, 0);
-    outBuffer->size = size;
-    return VK_SUCCESS;
-}
+    vkr = vkBindBufferMemory(m_device, buffer->handle, buffer->memory, 0);
+    if (vkr != VK_SUCCESS)
+    {
+        std::cout << "vkBindBufferMemory failed with result=" << vkr << "\n";
+        vkr = VK_ERROR_OUT_OF_DEVICE_MEMORY;
+        goto free_memory;
+    }
 
-void vk_track_buffer(const vk_buffer &buffer)
-{
-    m_buffers.push_back(buffer);
+    buffer->size = size;
+    m_buffers.push_back(*buffer);
+    return vkr;
+
+free_memory:
+    vkFreeMemory(m_device, buffer->memory, &g_bufferAllocCallbacks);
+    buffer->memory = VK_NULL_HANDLE;
+destroy_buffer:
+    vkDestroyBuffer(m_device, buffer->handle, &g_bufferAllocCallbacks);
+    buffer->handle = VK_NULL_HANDLE;
+    return vkr;
 }
 
 void my_create_buffer(void)
 {
+    const VkDeviceSize size = 1024 * 1024;
     vk_buffer buf;
-    VkResult vkr = vk_create_buffer(1024 * 1024,
+    VkResult vkr = vk_create_buffer(size,
                                      VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                      &buf);
     if (vkr == VK_SUCCESS)
     {
-        vk_track_buffer(buf);
-        std::cout << "Buffer created!\n";
+        vkr = vk_track_buffer(&buf, size,
+                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     }
-    else
+    if (vkr == VK_SUCCESS)
     {
+        std::cout << "Buffer created!\n";
+        return;
+    }
+
+    switch (vkr)
+    {
+    case VK_ERROR_INITIALIZATION_FAILED:
+        std::cout << "Warning: Buffer object could not be created.\n";
+        break;
+    case VK_ERROR_OUT_OF_DEVICE_MEMORY:
+        std::cout << "Warning: Not enough device memory to back buffer.\n";
+        break;
+    default:
         std::cout << "Warning! vk_create_buffer error=" << vkr << "\n";
     }
 }
